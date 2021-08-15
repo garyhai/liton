@@ -34,7 +34,7 @@ export class ToDoList extends LitElement implements RemoteModelHost {
   @property({attribute: false})
   listItems: ToDoItem[] = [
   ];
-  @property()
+  @property({type: Boolean})
   hideCompleted = false;
 
   render() {
@@ -50,7 +50,7 @@ export class ToDoList extends LitElement implements RemoteModelHost {
             </li>`
         )}
       </ul>
-      <input id="newitem" aria-label="New item">
+      <input id="newitem" aria-label="New item" @change=${this.addToDo}>
       <button @click=${this.addToDo}>Add</button>
       <button @click=${this.refresh}>Reset</button>
     `;
