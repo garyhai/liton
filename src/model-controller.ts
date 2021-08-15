@@ -3,7 +3,7 @@ import { ReactiveController, ReactiveControllerHost } from 'lit';
 export interface RemoteModelHost extends ReactiveControllerHost {
     onUpdate?(data: unknown, path?: string): void;
     onMulticast?(data: unknown): void;
-    onStreaming?(data: Blob | ArrayBuffer): void;
+    onStreaming?(data: Blob | ArrayBuffer): Promise<void>;
     onOpen?(ev: Event): void;
     onClose?(ev: CloseEvent): void;
     onError?(ev: Event | ErrorEvent): void;
@@ -83,7 +83,7 @@ export class ModelController implements ReactiveController {
             // const idData = await ev.data.slice(0, 4).arrayBuffer();
             // const id = new Uint32Array(idData);
             // const data = await ev.data.slice(4).arrayBuffer();
-            if (this.host.onStreaming) this.host.onStreaming(ev.data);
+            if (this.host.onStreaming) this.host.onStreaming(ev.data).then(() => console.log("chunk done")).catch(err => console.log("streaming error", err));
             return;
         }
         const data: RpcRequest | RpcResponse = JSON.parse(ev.data);

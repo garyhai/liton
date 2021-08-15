@@ -20,7 +20,7 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     private mediaSource?: MediaSource;
     private mediaFile?: File;
     private sourceBuffer?: SourceBuffer;
-    bufferSize = 2_000_000;
+    bufferSize = 1000000;
     private bufferRange = [0, 0];
 
     @property({ type: Boolean })
@@ -78,18 +78,21 @@ export class Videocaster extends LitElement implements RemoteModelHost {
 
     async onTimeUpdate() {
         const [low, high] = this.bufferRange;
-        if (high > 0 && high < low + this.bufferSize) {  // no more data
+        if (high > 0 && high < (low + this.bufferSize)) {  // no more data
             return;
         }
         const size = this.mediaFile!.size;
         let position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
-        if (position < low || position > high || high === 0) {  // seeking?
-            await this.fillBuffer(position);
-            return;
-        }
+        // if (position < low || position > high || high === 0) {  // seeking?
+        //     console.log("reset source buffer for seeking", position);
+        //     this.sourceBuffer!.abort();
+        //     await this.fillBuffer(Math.floor(position));
+        //     return;
+        // }
         const rate = (position - low) / this.bufferSize;
         if (rate > 0.5) {
-            await this.fillBuffer(this.bufferRange[1]);
+            console.log(position, this.videoPlayer.currentTime);
+            await this.fillBuffer(high);
         }
     }
 
@@ -110,7 +113,7 @@ export class Videocaster extends LitElement implements RemoteModelHost {
             const blob = this.mediaFile.slice(position, position + length);
             const chunk = await blob.arrayBuffer();
             this.bufferRange = [position, position + chunk.byteLength];
-            console.log("fetch chunk data: ", this.bufferRange, chunk.byteLength);
+            console.log("fetch chunk data: ", position, chunk.byteLength);
             this.sourceBuffer.appendBuffer(chunk);
             this.model.streaming(chunk);
         }

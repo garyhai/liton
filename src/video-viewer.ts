@@ -11,6 +11,7 @@ export class VideoViewer extends LitElement implements RemoteModelHost {
     private mediaSource?: MediaSource;
     private buffers: ArrayBuffer[] = [];
     private sourceBuffer?: SourceBuffer;
+    private started = false;
 
     render() {
         return html`
@@ -53,19 +54,34 @@ export class VideoViewer extends LitElement implements RemoteModelHost {
 
     onSourceOpen() {
         console.log("open viewver video:", this.source);
+        // const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"'
         this.sourceBuffer = this.mediaSource!.addSourceBuffer(this.source!.type);
-        this.buffers.forEach(data => this.sourceBuffer?.appendBuffer(data));
-        this.buffers = [];
+        this.sourceBuffer.addEventListener('updateend', () => this.tryUpdate());
+        if (!this.started && this.buffers.length) {
+            this.started = true;
+            this.sourceBuffer.appendBuffer(this.buffers.shift()!);
+        }
+    }
+
+    tryUpdate() {
+        const data = this.buffers.shift();
+        if (data !== undefined) {
+            try {
+                this.sourceBuffer!.appendBuffer(data);
+            } catch (e) {
+                console.trace(e);
+            }
+        }
     }
 
     async onStreaming(data: ArrayBuffer | Blob) {
         if (data instanceof Blob) {
             data = await data.arrayBuffer();
         }
-        if (this.sourceBuffer) {
-            this.sourceBuffer.appendBuffer(data);
-        } else {
-            this.buffers.push(data);
+        this.buffers.push(data);
+        if (!this.started && this.buffers.length && this.sourceBuffer) {
+            this.started = true;
+            this.sourceBuffer.appendBuffer(this.buffers.shift()!);
         }
     }
 }
