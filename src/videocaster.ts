@@ -1,28 +1,38 @@
 import { LitElement, html } from 'lit';
-import { customElement, query } from 'lit/decorators.js';
+import { customElement, query, property } from 'lit/decorators.js';
 import { ModelController, RemoteModelHost } from './model-controller.js';
+
+export interface RemoteCommand {
+    command: string;
+    param?: number | VideoSource;
+}
+
+export interface VideoSource {
+    name: string;
+    type: string;
+    size: number;
+}
 
 @customElement('video-caster')
 export class Videocaster extends LitElement implements RemoteModelHost {
     // Create the controller and store it
     private model = new ModelController(this, "ws://127.0.0.1:8080/ws/model/todolist");
-    private mediaSource!: MediaSource;
-    private mediaFile!: File;
-    private sourceBuffer!: SourceBuffer;
-    bufferSize = 4_000_000;
-    bufferDuration = 0;
+    private mediaSource?: MediaSource;
+    private mediaFile?: File;
+    private sourceBuffer?: SourceBuffer;
+    bufferSize = 2_000_000;
     private bufferRange = [0, 0];
 
-    onUpdate(_data: any, _path?: string) {
-    }
+    @property({ type: Boolean })
+    canPlay = false;
 
     render() {
         return html`
-<h2>同步播放</h2>
+<h2>同步播放主持人端</h2>
 <video id=videoPlayer controls @timeupdate=${this.onTimeUpdate} @canplay=${this.onCanPlay} @seeking=${this.onSeeking} ></video>
 <br/>
-<input type="file" id="videoFile" name="selectFile"/>
-<button @click=${this.playVideo}>播放视频</button>
+<input type="file" id="videoFile" name="selectFile" @change=${this.loadVideo} />
+<button ?disabled=${!this.canPlay} @click=${this.playVideo}>播放视频</button>
 
         `;
     }
@@ -33,29 +43,37 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     @query('#videoPlayer')
     videoPlayer!: HTMLVideoElement;
 
-    refresh() {
-        this.model.getData();
+    async playVideo() {
+        const command = {
+            command: "play",
+        }
+        this.model.multicast(command);
+        await this.videoPlayer.play();
     }
 
-    playVideo() {
+    loadVideo() {
         if (!this.videoPlayer || !this.videoFile || this.videoFile.value == "") return;
         this.mediaFile = this.videoFile.files![0];
+        const { name, size, type } = this.mediaFile;
+        const info = {
+            command: "prepare",
+            param: { name, size, type }
+        }
+        this.model.multicast(info);
         this.mediaSource = new MediaSource;
         this.mediaSource.addEventListener('sourceopen', async () => this.onSourceOpen());
         this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
+        this.canPlay = false;
         this.requestUpdate();
     }
 
     async onSourceOpen() {
-        console.log("open video:", this.mediaFile);
         this.sourceBuffer = this.mediaSource!.addSourceBuffer(this.mediaFile!.type);
         await this.fillBuffer(0);
     }
 
-    async onCanPlay() {
-        this.bufferDuration = this.videoPlayer.duration / this.mediaFile.size * this.bufferSize;
-        console.log("durations:", this.videoPlayer.duration, this.bufferDuration);
-        await this.videoPlayer.play();
+    onCanPlay() {
+        this.canPlay = true;
     }
 
     async onTimeUpdate() {
@@ -63,26 +81,26 @@ export class Videocaster extends LitElement implements RemoteModelHost {
         if (high > 0 && high < low + this.bufferSize) {  // no more data
             return;
         }
-        const size = this.mediaFile.size;
+        const size = this.mediaFile!.size;
         let position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
         if (position < low || position > high || high === 0) {  // seeking?
             await this.fillBuffer(position);
             return;
         }
-        const rate = (position - low)/this.bufferSize;
+        const rate = (position - low) / this.bufferSize;
         if (rate > 0.5) {
             await this.fillBuffer(this.bufferRange[1]);
         }
     }
 
-    onSeeking(e: Event) {
-        console.log(e);
+    onSeeking() {
+        if (!this.mediaSource || !this.sourceBuffer) return;
         if (this.mediaSource.readyState === 'open') {
-          this.sourceBuffer.abort();
-          console.log(this.mediaSource.readyState);
+            this.sourceBuffer.abort();
+            console.log(this.mediaSource.readyState);
         } else {
-          console.log('seek but not open?');
-          console.log(this.mediaSource.readyState);
+            console.log('seek but not open?');
+            console.log(this.mediaSource.readyState);
         }
     }
 
@@ -92,8 +110,9 @@ export class Videocaster extends LitElement implements RemoteModelHost {
             const blob = this.mediaFile.slice(position, position + length);
             const chunk = await blob.arrayBuffer();
             this.bufferRange = [position, position + chunk.byteLength];
+            console.log("fetch chunk data: ", this.bufferRange, chunk.byteLength);
             this.sourceBuffer.appendBuffer(chunk);
-            console.log('fetch next chunk:', this.bufferRange);
+            this.model.streaming(chunk);
         }
     }
 }

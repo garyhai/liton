@@ -1,7 +1,9 @@
 import { ReactiveController, ReactiveControllerHost } from 'lit';
 
 export interface RemoteModelHost extends ReactiveControllerHost {
-    onUpdate(data: unknown, path?: string): void;
+    onUpdate?(data: unknown, path?: string): void;
+    onMulticast?(data: unknown): void;
+    onStreaming?(data: Blob | ArrayBuffer): void;
     onOpen?(ev: Event): void;
     onClose?(ev: CloseEvent): void;
     onError?(ev: Event | ErrorEvent): void;
@@ -11,6 +13,7 @@ export class ModelController implements ReactiveController {
     host: RemoteModelHost;
     wsUrl: string;
     private conn?: WebSocket;
+    chunkSize = 60000;
 
     constructor(host: RemoteModelHost, url: string) {
         (this.host = host).addController(this);
@@ -36,6 +39,28 @@ export class ModelController implements ReactiveController {
         this.conn.send(rpcSetData(value, path));
     }
 
+    streaming(data: ArrayBuffer) {
+        if (!this.conn) throw new Error("disconnected");
+        let total = data.byteLength;
+        let offset = 0;
+        let chunk;
+        while ((total - offset) > this.chunkSize) {
+            chunk = new Uint8Array(data, offset, this.chunkSize);
+            this.conn.send(chunk);
+            offset += this.chunkSize;
+        }
+        if (offset < total) {
+            chunk = new Uint8Array(data, offset);
+            this.conn.send(chunk);
+            return;
+        }        
+    }
+
+    multicast(value: unknown, path?: string) {
+        if (!this.conn) throw new Error("disconnected");
+        this.conn.send(rpcMulticast(value, path))
+    }
+
     connect() {
         this.disconnect();
         this.conn = new WebSocket(this.wsUrl);
@@ -53,18 +78,32 @@ export class ModelController implements ReactiveController {
     }
 
     onMessage(ev: MessageEvent) {
-        console.log(ev.data);
+        console.log("got message");
+        if (ev.data instanceof Blob || ev.data instanceof ArrayBuffer) {
+            // const idData = await ev.data.slice(0, 4).arrayBuffer();
+            // const id = new Uint32Array(idData);
+            // const data = await ev.data.slice(4).arrayBuffer();
+            if (this.host.onStreaming) this.host.onStreaming(ev.data);
+            return;
+        }
         const data: RpcRequest | RpcResponse = JSON.parse(ev.data);
         if (isRpcRequest(data)) {
-            if (isRpcPublish(data)) {
-                if (Array.isArray(data.params)) {
-                    const value = data.params[3];
-                    const path = data.params[2] as string;
-                    this.host.onUpdate(value, path);
+            switch (data.method) {
+                case "UPDATE": {
+                    if (this.host.onUpdate && Array.isArray(data.params)) {
+                        const value = data.params[3];
+                        const path = data.params[2] as string;
+                        this.host.onUpdate(value, path);
+                    }
+                    break;
+                }
+                case "MULTICAST": {
+                    if (this.host.onMulticast) this.host.onMulticast(data.params);
+                    break;
                 }
             }
         } else {
-            if (data.id) {
+            if (this.host.onUpdate && data.id) {
                 this.host.onUpdate(data.result, data.id as string);
             }
         }
@@ -107,6 +146,14 @@ function rpcSetData(data: unknown, path?: string): string {
     return JSON.stringify(rpc);
 }
 
+function rpcMulticast(data: unknown, path?: string): string {
+    const rpc = {
+        jsonrpc: "2.0",
+        method: "MULTICAST",
+        params: [data, path ?? "."],
+    };
+    return JSON.stringify(rpc);
+}
 
 export interface RpcRequest {
     jsonrpc: "2.0";
@@ -130,8 +177,4 @@ export interface ErrorData {
 
 export function isRpcRequest(data: RpcRequest | RpcResponse): data is RpcRequest {
     return (data as RpcRequest).method !== undefined;
-}
-
-export function isRpcPublish(data: RpcRequest): boolean {
-    return data.method === "PUBLISH";
 }
