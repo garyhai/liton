@@ -1,6 +1,6 @@
-import { LitElement, html } from 'lit';
+import { html } from 'lit';
 import { customElement, query, property } from 'lit/decorators.js';
-import { ModelController, RemoteModelHost } from './model-controller.js';
+import { RemoteModelBase } from './remoteview.js';
 
 export interface RemoteCommand {
     command: string;
@@ -14,21 +14,25 @@ export interface VideoSource {
 }
 
 @customElement('video-caster')
-export class Videocaster extends LitElement implements RemoteModelHost {
-    // Create the controller and store it
-    private model = new ModelController(this, "ws://127.0.0.1:8080/ws/model/todolist");
+export class Videocaster extends RemoteModelBase {
     private mediaSource?: MediaSource;
     private mediaFile?: File;
     private sourceBuffer?: SourceBuffer;
     private bufferRange = [0, 0];
-    bufferSize = 10_000_000;
-    syncInterval = 10;
+    bufferSize = 2_000_000;
+    syncInterval = 20;
+
+    @property({ type: Number })
+    chunkCounter = 0;
+
+    @property({ type: Number })
+    totalSize = 0;
 
     @property({ type: Boolean })
     canPlay = false;
 
     @property({ type: Boolean })
-    viewerControls = false;
+    viewerControls = true;
 
     render() {
         return html`
@@ -36,7 +40,9 @@ export class Videocaster extends LitElement implements RemoteModelHost {
 <video id=videoPlayer controls @timeupdate=${this.onTimeUpdate} @canplay=${this.onCanPlay} @seeking=${this.onSeeking} @play=${this.playVideo} @pause=${this.pauseVideo}></video>
 <br/>
 <input type="file" id="videoFile" name="selectFile" @change=${this.loadVideo} />
-<label><input type="checkbox" @change=${this.setViewerControls} ?checked=${this.viewerControls}>远端控制权</label>
+<label><input type="checkbox" ?checked=${this.viewerControls} @change=${this.setViewerControls}>允许远端控制</label>
+<h3>收到的块数：${this.chunkCounter}, 总大小: ${this.totalSize}</h3>
+
         `;
     }
 
@@ -46,10 +52,12 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     @query('#videoPlayer')
     videoPlayer!: HTMLVideoElement;
 
-    setViewerControls() {
+    setViewerControls(ev: Event) {
+        this.viewerControls = (ev.target as HTMLInputElement).checked;
+        console.log("set controls to:", this.viewerControls);
         const command = {
             command: "controls",
-            param: this.viewerControls ? 1:0,
+            param: this.viewerControls ? 1 : 0,
         }
         this.model.multicast(command);
     }
@@ -87,7 +95,8 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     }
 
     async onSourceOpen() {
-        this.sourceBuffer = this.mediaSource!.addSourceBuffer(this.mediaFile!.type);
+        const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+        this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeCodec);//this.mediaFile!.type);
         await this.fillBuffer(0);
     }
 
@@ -119,7 +128,7 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     onSeeking() {
         if (!this.mediaSource || !this.sourceBuffer) return;
         if (this.mediaSource.readyState === 'open') {
-            this.sourceBuffer.abort();
+            // this.sourceBuffer.abort();
             console.log(this.mediaSource.readyState);
         } else {
             console.log('seek but not open?');
@@ -134,9 +143,11 @@ export class Videocaster extends LitElement implements RemoteModelHost {
     }
 
     private async fillBuffer(position: number) {
+        this.chunkCounter++;
         if (this.mediaFile && this.sourceBuffer) {
             const length = Math.min(this.mediaFile.size - position, this.bufferSize);
             const blob = this.mediaFile.slice(position, position + length);
+            this.totalSize += blob.size;
             const chunk = await blob.arrayBuffer();
             this.bufferRange = [position, position + chunk.byteLength];
             this.sourceBuffer.appendBuffer(chunk);

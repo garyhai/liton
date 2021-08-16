@@ -53,7 +53,7 @@ export class ModelController implements ReactiveController {
             chunk = new Uint8Array(data, offset);
             this.conn.send(chunk);
             return;
-        }        
+        }
     }
 
     multicast(value: unknown, path?: string) {
@@ -82,7 +82,7 @@ export class ModelController implements ReactiveController {
             // const idData = await ev.data.slice(0, 4).arrayBuffer();
             // const id = new Uint32Array(idData);
             // const data = await ev.data.slice(4).arrayBuffer();
-            if (this.host.onStreaming) this.host.onStreaming(ev.data).then(() => {}).catch(err => console.log("streaming error", err));
+            if (this.host.onStreaming) this.host.onStreaming(ev.data).then(() => { }).catch(err => console.log("streaming error", err));
             return;
         }
         const data: RpcRequest | RpcResponse = JSON.parse(ev.data);

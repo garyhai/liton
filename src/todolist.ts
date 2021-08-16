@@ -1,6 +1,6 @@
-import {LitElement, html, css} from 'lit';
+import {html, css} from 'lit';
 import {customElement, property, query} from 'lit/decorators.js';
-import {ModelController, RemoteModelHost} from './model-controller.js';
+import { RemoteModelBase } from './remoteview.js';
 
 type ToDoItem = {
   text: string,
@@ -8,10 +8,7 @@ type ToDoItem = {
 }
 
 @customElement('todo-list')
-export class ToDoList extends LitElement implements RemoteModelHost {
-  // Create the controller and store it
-  private model = new ModelController(this, "ws://127.0.0.1:8080/ws/model/todolist");
-
+export class ToDoList extends RemoteModelBase {
   static get styles() {
     return css`
       .completed {
@@ -39,7 +36,7 @@ export class ToDoList extends LitElement implements RemoteModelHost {
 
   render() {
     return html`
-      <h2>To Do</h2>
+      <h2>数据存放在远程的 To Do</h2>
       <ul>
         ${this.listItems.map((item, pos) =>
           html`

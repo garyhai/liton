@@ -51,7 +51,7 @@ export class ToDoList extends LitElement {
       : caughtUpMessage;
 
     return html`
-      <h2>数据存放在远程的 To Do</h2>
+      <h2>To Do</h2>
       ${todosOrMessage}
       <input id="newitem" aria-label="New item">
       <button @click=${this.addToDo}>Add</button>
