@@ -78,12 +78,11 @@ export class ModelController implements ReactiveController {
     }
 
     onMessage(ev: MessageEvent) {
-        console.log("got message");
         if (ev.data instanceof Blob || ev.data instanceof ArrayBuffer) {
             // const idData = await ev.data.slice(0, 4).arrayBuffer();
             // const id = new Uint32Array(idData);
             // const data = await ev.data.slice(4).arrayBuffer();
-            if (this.host.onStreaming) this.host.onStreaming(ev.data).then(() => console.log("chunk done")).catch(err => console.log("streaming error", err));
+            if (this.host.onStreaming) this.host.onStreaming(ev.data).then(() => {}).catch(err => console.log("streaming error", err));
             return;
         }
         const data: RpcRequest | RpcResponse = JSON.parse(ev.data);

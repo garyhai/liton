@@ -12,36 +12,47 @@ export class VideoViewer extends LitElement implements RemoteModelHost {
     private buffers: ArrayBuffer[] = [];
     private sourceBuffer?: SourceBuffer;
     private started = false;
+    maxDiff = 5;
 
     render() {
         return html`
 <h2>同步播放观众端</h2>
-<video id=videoPlayer controls></video>
+<video id=videoPlayer ></video>
         `;
     }
 
     @query('#videoPlayer')
     videoPlayer!: HTMLVideoElement;
 
-    async onMulticast(data: unknown[]) {
-        const { command, param: args } = data[0] as RemoteCommand;
+    onMulticast(data: unknown[]) {
+        const { command, param } = data[0] as RemoteCommand;
         switch (command) {
             case "prepare":
-                return this.loadVideo(args as VideoSource);
+                return this.loadVideo(param as VideoSource);
             case "play":
-                return await this.playVideo(args as number);
+                return this.videoPlayer.play().then(() => {});
             case "pause":
-                this.videoPlayer.pause();
-                return;
-            case "stop":
+                return this.videoPlayer.pause();
+            case "sync":{
+                const hostTime = param as number;
+                let lag = Math.abs(this.videoPlayer.currentTime - hostTime);
+                if (lag > this.maxDiff) {
+                    this.videoPlayer.currentTime = hostTime;
+                    this.sourceBuffer!.abort();
+                }
+                break;
+            }
+            case "controls":
+                return this.setControls(param as number);
             default: throw new Error(`unknown command: ${data}`);
         }
     }
 
-    async playVideo(offset?: number) {
-        if (offset != null) this.videoPlayer.currentTime = offset;
-        await this.videoPlayer.play();
+    setControls(param: number | boolean) {
+        this.videoPlayer.controls = !!param;
+        this.requestUpdate();
     }
+
 
     loadVideo(source: VideoSource) {
         if (!this.videoPlayer) return;
