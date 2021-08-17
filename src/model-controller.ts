@@ -13,7 +13,7 @@ export class ModelController implements ReactiveController {
     host: RemoteModelHost;
     wsUrl: string;
     private conn?: WebSocket;
-    chunkSize = 60000;
+    maxSize = 60000;
 
     constructor(host: RemoteModelHost, url: string) {
         (this.host = host).addController(this);
@@ -41,18 +41,15 @@ export class ModelController implements ReactiveController {
 
     streaming(data: ArrayBuffer) {
         if (!this.conn) throw new Error("disconnected");
-        let total = data.byteLength;
+        const total = data.byteLength;
+        if (total < this.maxSize)
+            return this.conn.send(data);
         let offset = 0;
-        let chunk;
-        while ((total - offset) > this.chunkSize) {
-            chunk = new Uint8Array(data, offset, this.chunkSize);
-            this.conn.send(chunk);
-            offset += this.chunkSize;
-        }
-        if (offset < total) {
-            chunk = new Uint8Array(data, offset);
-            this.conn.send(chunk);
-            return;
+        while (offset < total) {
+            const length = Math.min(this.maxSize, total - offset);
+            const block = new DataView(data, offset, length);
+            offset += length;
+            this.conn.send(block);
         }
     }
 

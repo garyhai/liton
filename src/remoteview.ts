@@ -11,16 +11,16 @@ export abstract class RemoteModelBase extends LitElement implements RemoteModelH
     @property()
     modelName = "todolist";
     @property()
-    hostName = "";
+    remoteHost = "";
     @property()
-    hostPort = "8080";
+    remotePort = "8080";
 
     protected model: ModelController;
 
     constructor() {
         super();
         if (!this.modelUrl) {
-            this.modelUrl = makeModelUrl(this.wsPath, this.modelName, this.hostName, this.hostPort);
+            this.modelUrl = makeModelUrl(this.wsPath, this.modelName, this.remoteHost, this.remotePort);
         }
         this.model = new ModelController(this, this.modelUrl);
     }

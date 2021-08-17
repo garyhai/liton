@@ -60,9 +60,16 @@ export class VideoViewer extends RemoteModelBase {
         this.videoPlayer.controls = !!param;
     }
 
+    closeVideo() {
+        this.sourceBuffer?.abort();
+        this.mediaSource?.endOfStream()
+        this.mediaSource = undefined;
+        this.sourceBuffer = undefined;
+        this.buffers = [];
+    }
 
     loadVideo(source: VideoSource) {
-        if (!this.videoPlayer) return;
+        this.closeVideo();
         this.source = source;
         this.mediaSource = new MediaSource;
         this.mediaSource.addEventListener('sourceopen', () => this.onSourceOpen());

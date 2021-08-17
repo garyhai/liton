@@ -52,6 +52,15 @@ export class Videocaster extends RemoteModelBase {
     @query('#videoPlayer')
     videoPlayer!: HTMLVideoElement;
 
+    closeVideo() {
+        this.sourceBuffer?.abort();
+        this.mediaSource?.endOfStream()
+        this.mediaSource = undefined;
+        this.sourceBuffer = undefined;
+        this.mediaFile = undefined;
+        this.bufferRange = [0, 0];
+    }
+
     setViewerControls(ev: Event) {
         this.viewerControls = (ev.target as HTMLInputElement).checked;
         console.log("set controls to:", this.viewerControls);
@@ -79,6 +88,7 @@ export class Videocaster extends RemoteModelBase {
     }
 
     loadVideo() {
+        this.closeVideo();
         if (!this.videoPlayer || !this.videoFile || this.videoFile.value == "") return;
         this.mediaFile = this.videoFile.files![0];
         const { name, size, type } = this.mediaFile;
