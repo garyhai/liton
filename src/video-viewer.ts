@@ -9,21 +9,19 @@ export class VideoViewer extends RemoteModelBase {
     private mediaSource?: MediaSource;
     private buffers: ArrayBuffer[] = [];
     private sourceBuffer?: SourceBuffer;
-    // private started = false;
-    @property({ type: Number })
-    maxLag = 3;
+    private stopping = false;
 
     @property({ type: Number })
-    chunkCounter = 0;
+    maxLag = 1;
 
     @property({ type: Number })
-    totalSize = 0;
+    received = 0;
 
     render() {
         return html`
 <h2>同步播放观众端</h2>
 <video id=videoPlayer controls></video>
-<h3>收到的块数：${this.chunkCounter}, 总大小: ${this.totalSize}</h3>
+<h3>已收到的数据长度：${this.received}</h3>
         `;
     }
 
@@ -65,7 +63,9 @@ export class VideoViewer extends RemoteModelBase {
         this.mediaSource?.endOfStream()
         this.mediaSource = undefined;
         this.sourceBuffer = undefined;
+        this.stopping = false;
         this.buffers = [];
+        this.received = 0;
     }
 
     loadVideo(source: VideoSource) {
@@ -86,20 +86,25 @@ export class VideoViewer extends RemoteModelBase {
     }
 
     tryUpdate() {
-        while (!this.sourceBuffer?.updating) {
+        while (this.sourceBuffer && !this.sourceBuffer.updating) {
             const data = this.buffers.shift();
             if (data === undefined) break;
             this.sourceBuffer!.appendBuffer(data);
         }
+
+        if (this.sourceBuffer && !this.sourceBuffer.updating && this.stopping) {
+            this.mediaSource?.endOfStream();
+        }
     }
 
     async onStreaming(data: ArrayBuffer | Blob) {
-        this.chunkCounter++;
         if (data instanceof Blob) {
             data = await data.arrayBuffer();
         }
-        this.totalSize += data.byteLength;
-
+        this.received += data.byteLength;
+        if (this.source && this.received >= this.source.size) {
+            this.stopping = true;
+        }
         this.buffers.push(data);
         this.tryUpdate();
     }
