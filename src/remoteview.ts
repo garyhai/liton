@@ -1,6 +1,7 @@
 import { LitElement, } from 'lit';
 import { property } from 'lit/decorators.js';
 import { ModelController, RemoteModelHost } from './model-controller.js';
+import jp from 'jsonpath';
 
 export abstract class RemoteModelBase extends LitElement implements RemoteModelHost {
     // Create the controller and store it
@@ -35,4 +36,19 @@ export function makeModelUrl(url_or_path: string, modelName: string, host?: stri
         host = `${host}:${port}`;
     }
     return `${host}${url_or_path}/${modelName}`;
+}
+
+export function getValue(data: unknown, path: string): unknown {
+    if (path == null || path === '$' || path === '.') return data;
+    if (path.startsWith('.'))  path = '$' + path;
+    return jp.value(data, path);
+}
+
+export function putValue(data: unknown, newValue: unknown, path?: string): unknown {
+    if (path == null || path === '$' || path === '.') {
+        if (newValue === undefined) data = newValue;
+        return data;
+    }
+    if (!path.startsWith('$'))  path = '$.' + path;
+    return jp.value(data, path, newValue);
 }

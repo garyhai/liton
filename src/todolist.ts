@@ -1,6 +1,6 @@
 import {html, css} from 'lit';
 import {customElement, property, query} from 'lit/decorators.js';
-import { RemoteModelBase } from './remoteview.js';
+import { putValue, RemoteModelBase } from './remoteview.js';
 
 type ToDoItem = {
   text: string,
@@ -20,12 +20,8 @@ export class ToDoList extends RemoteModelBase {
 
   onUpdate(data: any, path?: string) {
     console.log("onupdate: ", data, path);
-    if (path === "." || path === undefined) {
-      this.listItems = data;
-      this.requestUpdate();
-    } else {
-      this.refresh();
-    }
+    putValue(this.listItems, data, path);
+    this.requestUpdate();
   }
 
   @property({attribute: false})
