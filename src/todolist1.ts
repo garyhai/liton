@@ -19,8 +19,8 @@ export class ToDoList extends LitElement {
 
   @property({attribute: false})
   listItems = [
-    { text: 'Make to do list', completed: true },
-    { text: 'Complete Lit on tutorial', completed: false }
+    {text: 'Make to do list', completed: true},
+    {text: 'Complete Lit on tutorial', completed: false},
   ];
   @property({type: Boolean})
   hideCompleted = false;
@@ -31,35 +31,32 @@ export class ToDoList extends LitElement {
       : this.listItems;
     const todos = html`
       <ul>
-        ${items.map((item) =>
-            html`
-              <li
-                  class=${item.completed ? 'completed' : ''}
-                  @click=${() => this.toggleCompleted(item)}>
-                ${item.text}
-              </li>`
+        ${items.map(
+          (item) =>
+            html` <li
+              class=${item.completed ? 'completed' : ''}
+              @click=${() => this.toggleCompleted(item)}
+            >
+              ${item.text}
+            </li>`
         )}
       </ul>
     `;
-    const caughtUpMessage = html`
-      <p>
-      You're all caught up!
-      </p>
-    `;
-    const todosOrMessage = items.length > 0
-      ? todos
-      : caughtUpMessage;
+    const caughtUpMessage = html` <p>You're all caught up!</p> `;
+    const todosOrMessage = items.length > 0 ? todos : caughtUpMessage;
 
     return html`
       <h2>To Do</h2>
       ${todosOrMessage}
-      <input id="newitem" aria-label="New item">
+      <input id="newitem" aria-label="New item" />
       <button @click=${this.addToDo}>Add</button>
-      <br>
+      <br />
       <label>
-        <input type="checkbox"
+        <input
+          type="checkbox"
           @change=${this.setHideCompleted}
-          ?checked=${this.hideCompleted}>
+          ?checked=${this.hideCompleted}
+        />
         Hide completed
       </label>
     `;
@@ -83,4 +80,3 @@ export class ToDoList extends LitElement {
     this.input.value = '';
   }
 }
-

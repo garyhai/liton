@@ -1,11 +1,11 @@
 import {html, css} from 'lit';
 import {customElement, property, query} from 'lit/decorators.js';
-import { putValue, RemoteModelBase } from './remoteview.js';
+import {putValue, RemoteModelBase} from './remoteview.js';
 
 type ToDoItem = {
   text: string;
   completed: boolean;
-}
+};
 
 @customElement('todo-list')
 export class ToDoList extends RemoteModelBase {
@@ -19,14 +19,13 @@ export class ToDoList extends RemoteModelBase {
   }
 
   onUpdate(data: unknown, path?: string) {
-    console.log("onupdate: ", data, path);
+    console.log('onupdate: ', data, path);
     putValue(this.listItems, data, path);
     this.requestUpdate();
   }
 
   @property({attribute: false})
-  listItems: ToDoItem[] = [
-  ];
+  listItems: ToDoItem[] = [];
   @property({type: Boolean})
   hideCompleted = false;
 
@@ -34,16 +33,17 @@ export class ToDoList extends RemoteModelBase {
     return html`
       <h2>数据存放在远程的 To Do</h2>
       <ul>
-        ${this.listItems.map((item, pos) =>
-          html`
-            <li
-                class=${item.completed ? 'completed' : ''}
-                @click=${() => this.toggleCompleted(item, pos)}>
+        ${this.listItems.map(
+          (item, pos) =>
+            html` <li
+              class=${item.completed ? 'completed' : ''}
+              @click=${() => this.toggleCompleted(item, pos)}
+            >
               ${item.text}
             </li>`
         )}
       </ul>
-      <input id="newitem" aria-label="New item" @change=${this.addToDo}>
+      <input id="newitem" aria-label="New item" @change=${this.addToDo} />
       <button @click=${this.addToDo}>Add</button>
       <button @click=${this.refresh}>Reset</button>
     `;
