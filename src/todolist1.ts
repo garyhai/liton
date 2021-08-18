@@ -2,8 +2,8 @@ import {LitElement, html, css} from 'lit';
 import {customElement, property, query} from 'lit/decorators.js';
 
 type ToDoItem = {
-  text: string,
-  completed: boolean
+  text: string;
+  completed: boolean;
 };
 
 @customElement('todo-list-1')
@@ -22,7 +22,7 @@ export class ToDoList extends LitElement {
     { text: 'Make to do list', completed: true },
     { text: 'Complete Lit on tutorial', completed: false }
   ];
-  @property()
+  @property({type: Boolean})
   hideCompleted = false;
 
   render() {

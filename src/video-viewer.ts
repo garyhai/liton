@@ -39,7 +39,7 @@ export class VideoViewer extends RemoteModelBase {
                 return this.videoPlayer.pause();
             case "sync": {
                 const hostTime = param as number;
-                let lag = Math.abs(this.videoPlayer.currentTime - hostTime);
+                const lag = Math.abs(this.videoPlayer.currentTime - hostTime);
                 if (lag > this.maxLag) {
                     console.log("lagged: ", lag);
                     this.videoPlayer.currentTime = hostTime;

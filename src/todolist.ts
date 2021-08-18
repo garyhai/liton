@@ -3,8 +3,8 @@ import {customElement, property, query} from 'lit/decorators.js';
 import { putValue, RemoteModelBase } from './remoteview.js';
 
 type ToDoItem = {
-  text: string,
-  completed: boolean
+  text: string;
+  completed: boolean;
 }
 
 @customElement('todo-list')
@@ -18,7 +18,7 @@ export class ToDoList extends RemoteModelBase {
     `;
   }
 
-  onUpdate(data: any, path?: string) {
+  onUpdate(data: unknown, path?: string) {
     console.log("onupdate: ", data, path);
     putValue(this.listItems, data, path);
     this.requestUpdate();

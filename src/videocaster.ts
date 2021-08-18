@@ -127,7 +127,7 @@ export class Videocaster extends RemoteModelBase {
             return;
         }
         const size = this.mediaFile!.size;
-        let position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
+        const position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
         const rate = (position - low) / this.bufferSize;
         if (rate > 0.5) {
             console.log(position, this.videoPlayer.currentTime);

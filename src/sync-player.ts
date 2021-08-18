@@ -76,9 +76,9 @@ export class SyncPlayer extends RemoteModelBase {
         bufferTime: 20,
     }
 
-    onUpdate(data: any, path?: string) {
+    onUpdate(data: unknown, path?: string) {
         console.log("virtual player is changed: ", data, path);
-        const { playing, syncing, pip, fullScreen, source } = this.vPlayer;
+        const { playing, syncing, fullScreen, source } = this.vPlayer;
         putValue(this.vPlayer, data, path);
         if (!isSameSource(this.vPlayer.source, source)) {
             this.remoteLoadVideo();
@@ -186,7 +186,7 @@ export class SyncPlayer extends RemoteModelBase {
 
     syncSeek() {
         const { syncing } = this.vPlayer;
-        let gap = Math.abs(this.videoPlayer.currentTime - syncing);
+        const gap = Math.abs(this.videoPlayer.currentTime - syncing);
         if (gap > this.maxGap) {
             console.log("sync the gap:", gap);
             this.videoPlayer.currentTime = syncing;
@@ -202,7 +202,7 @@ export class SyncPlayer extends RemoteModelBase {
         this.canPlay = true;
         if (this.isCaster) {
             this.vPlayer.duration = this.videoPlayer.duration;
-            let bs = (this.vPlayer.bufferTime / this.vPlayer.duration) * this.vPlayer.source!.size;
+            const bs = (this.vPlayer.bufferTime / this.vPlayer.duration) * this.vPlayer.source!.size;
             this.bufferSize = Math.max(bs, MIN_BUFFER_SIZE);
         } else if (this.toPlay) {
             this.videoPlayer.play()
@@ -258,7 +258,7 @@ export class SyncPlayer extends RemoteModelBase {
             data = undefined;
         }
         while (this.sourceBuffer && !this.sourceBuffer.updating) {
-            data ??= this.buffers.shift();
+            if (!data) data = this.buffers.shift();
             if (!data) break;
             this.sourceBuffer!.appendBuffer(data);
             data = undefined;
@@ -298,7 +298,7 @@ export class SyncPlayer extends RemoteModelBase {
             return;
         }
         const size = this.mediaFile!.size;
-        let position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
+        const position = this.videoPlayer.currentTime / this.videoPlayer.duration * size;
         const rate = (position - low) / this.bufferSize;
         if (rate > 0.5) {
             console.log(position, this.videoPlayer.currentTime);

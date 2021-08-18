@@ -1,5 +1,38 @@
 import { ReactiveController, ReactiveControllerHost } from 'lit';
 
+export function isRpcRequest(data: RpcRequest | RpcResponse): data is RpcRequest {
+    return (data as RpcRequest).method !== undefined;
+}
+
+function rpcGetData(path?: string): string {
+    const rpc = {
+        jsonrpc: "2.0",
+        method: "get",
+        params: [path ?? "."],
+        id: path ?? ".",
+    };
+    return JSON.stringify(rpc);
+}
+
+function rpcSetData(data: unknown, path?: string): string {
+    const rpc = {
+        jsonrpc: "2.0",
+        method: "set",
+        params: [data, path ?? "."],
+        id: null
+    };
+    return JSON.stringify(rpc);
+}
+
+function rpcMulticast(data: unknown, path?: string): string {
+    const rpc = {
+        jsonrpc: "2.0",
+        method: "MULTICAST",
+        params: [data, path ?? "."],
+    };
+    return JSON.stringify(rpc);
+}
+
 export interface RemoteModelHost extends ReactiveControllerHost {
     onUpdate?(data: unknown, path?: string): void;
     onMulticast?(data: unknown): void;
@@ -122,35 +155,6 @@ export class ModelController implements ReactiveController {
     }
 }
 
-function rpcGetData(path?: string): string {
-    const rpc = {
-        jsonrpc: "2.0",
-        method: "get",
-        params: [path ?? "."],
-        id: path ?? ".",
-    };
-    return JSON.stringify(rpc);
-}
-
-function rpcSetData(data: unknown, path?: string): string {
-    const rpc = {
-        jsonrpc: "2.0",
-        method: "set",
-        params: [data, path ?? "."],
-        id: null
-    };
-    return JSON.stringify(rpc);
-}
-
-function rpcMulticast(data: unknown, path?: string): string {
-    const rpc = {
-        jsonrpc: "2.0",
-        method: "MULTICAST",
-        params: [data, path ?? "."],
-    };
-    return JSON.stringify(rpc);
-}
-
 export interface RpcRequest {
     jsonrpc: "2.0";
     method: string;
@@ -166,11 +170,8 @@ export interface RpcResponse {
 }
 
 export interface ErrorData {
-    code: number,
-    message: string,
-    data?: unknown,
+    code: number;
+    message: string;
+    data?: unknown;
 }
 
-export function isRpcRequest(data: RpcRequest | RpcResponse): data is RpcRequest {
-    return (data as RpcRequest).method !== undefined;
-}
