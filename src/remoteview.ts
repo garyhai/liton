@@ -1,7 +1,7 @@
+import jp from 'jsonpath';
 import {LitElement} from 'lit';
 import {property} from 'lit/decorators.js';
 import {ModelController, RemoteModelHost} from './model-controller.js';
-import jp from 'jsonpath';
 
 export function makeModelUrl(
   urlOrPath: string,

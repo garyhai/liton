@@ -82,6 +82,10 @@ export class SyncPlayer extends RemoteModelBase {
     fullScreen: false,
     bufferTime: 20,
   };
+  
+  onOpen() {
+    this.model.getData();
+  }
 
   onUpdate(data: unknown, path?: string) {
     console.log('virtual player is changed: ', data, path);
