@@ -19,8 +19,9 @@ export class ToDoList extends RemoteModelBase {
   }
 
   onUpdate(data: unknown, path?: string) {
-    console.log("onupdate: ", data, path);
-    putValue(this.listItems, data, path);
+    console.log("onupdate: ", data, path, this.listItems);
+    this.listItems = putValue(this.listItems, data, path);
+    console.log("updated:", this.listItems);
     this.requestUpdate();
   }
 

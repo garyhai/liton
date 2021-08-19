@@ -36,7 +36,7 @@ export class Videocaster extends RemoteModelBase {
 
   render() {
     return html`
-      <h2>同步播放主持人端</h2>
+      <h2>同步播放主持人端: multcast 实现</h2>
       <video
         id="videoPlayer"
         controls

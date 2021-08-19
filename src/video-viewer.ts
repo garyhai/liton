@@ -19,11 +19,16 @@ export class VideoViewer extends RemoteModelBase {
 
   render() {
     return html`
-      <h2>同步播放观众端</h2>
-      <video id="videoPlayer" controls></video>
+      <h2>同步播放观众端: multcast 实现</h2>
+      <video id="videoPlayer" controls @canplay=${this.onCanPlay}></video>
       <h3>已收到的数据长度：${this.received}</h3>
     `;
   }
+
+  onCanPlay() {
+    console.log("viewer can play now");
+  }
+
 
   @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
@@ -90,6 +95,7 @@ export class VideoViewer extends RemoteModelBase {
     while (this.sourceBuffer && !this.sourceBuffer.updating) {
       const data = this.buffers.shift();
       if (data === undefined) break;
+      console.log("append buffer", data.byteLength);
       this.sourceBuffer!.appendBuffer(data);
     }
 

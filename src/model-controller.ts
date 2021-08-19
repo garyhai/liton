@@ -38,7 +38,7 @@ function rpcMulticast(data: unknown, path?: string): string {
 export interface RemoteModelHost extends ReactiveControllerHost {
   onUpdate?(data: unknown, path?: string): void;
   onMulticast?(data: unknown): void;
-  onStreaming?(data: Blob | ArrayBuffer): Promise<void>;
+  onStreaming?(data: Blob | ArrayBuffer): void;
   onOpen?(ev: Event): void;
   onClose?(ev: CloseEvent): void;
   onError?(ev: Event | ErrorEvent): void;
@@ -50,13 +50,9 @@ export class ModelController implements ReactiveController {
   private conn?: WebSocket;
   maxSize = 60000;
 
-  constructor(host: RemoteModelHost, url: string) {
+  constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
-    this.wsUrl = url;
-  }
-
-  hostConnected() {
-    this.connect();
+    this.wsUrl = url ?? "";
   }
 
   hostDisconnected() {
@@ -66,6 +62,7 @@ export class ModelController implements ReactiveController {
   getData(path?: string) {
     if (!this.conn) throw new Error("disconnected");
     const req = rpcGetData(path);
+    console.log("data to sent", req);
     this.conn.send(req);
   }
 
@@ -92,9 +89,11 @@ export class ModelController implements ReactiveController {
     this.conn.send(rpcMulticast(value, path));
   }
 
-  connect() {
+  connect(url?: string) {
+    url = url ?? this.wsUrl;
     this.disconnect();
-    this.conn = new WebSocket(this.wsUrl);
+    this.conn = new WebSocket(url);
+    this.conn.binaryType = "arraybuffer";
     this.conn.onmessage = (ev) => this.onMessage(ev);
     this.conn.onopen = (ev) => this.onOpen(ev);
     this.conn.onclose = (ev) => this.onClose(ev);
@@ -109,16 +108,12 @@ export class ModelController implements ReactiveController {
   }
 
   onMessage(ev: MessageEvent) {
-    if (ev.data instanceof Blob || ev.data instanceof ArrayBuffer) {
+    if (ev.data instanceof ArrayBuffer) {
       // const idData = await ev.data.slice(0, 4).arrayBuffer();
       // const id = new Uint32Array(idData);
       // const data = await ev.data.slice(4).arrayBuffer();
       if (this.host.onStreaming)
-        this.host
-          .onStreaming(ev.data)
-          .then(() => {})
-          .catch((err) => console.log("streaming error", err));
-      return;
+        return this.host.onStreaming(ev.data);
     }
     const data: RpcRequest | RpcResponse = JSON.parse(ev.data);
     if (isRpcRequest(data)) {

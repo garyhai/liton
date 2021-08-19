@@ -34,12 +34,16 @@ export abstract class RemoteModelBase
   @property()
   remoteHost = "";
   @property()
-  remotePort = "8080";
+  remotePort = "8060";
 
   protected model: ModelController;
 
   constructor() {
     super();
+    this.model = new ModelController(this, this.modelUrl);
+  }
+
+  connectedCallback() {
     if (!this.modelUrl) {
       this.modelUrl = makeModelUrl(
         this.wsPath,
@@ -48,47 +52,53 @@ export abstract class RemoteModelBase
         this.remotePort
       );
     }
-    this.model = new ModelController(this, this.modelUrl);
+    console.log("websocket url:", this.modelUrl);
+    this.model.wsUrl = this.modelUrl;
+    this.model.connect();
+    super.connectedCallback();
   }
 }
 
 export function getValue(data: any, path?: string): any {
   if (path == null || path === "$" || path === ".") return data;
-  traverse(data, path.split("."));
+  traverse(data, path.split("."))[2];
 }
 
 export function traverse(data: any, path: string[]): any {
   while (path[0] === "$" || path[0] === "") path.shift();
-  if (!path.length) return data;
-  const r = /([^\[]+)(\[(\d+)\])?/;
+  const r = /([^\[]*)(\[(\d+)\])?/;
+  let parent = data;
   let v = data;
+  let idx = undefined;
   for (const key of path) {
     const arr = key.match(r);
-    if (!arr || arr[1] == undefined)
+    if (!arr)
       throw new Error(`failed to parse path: ${path}`);
-    v = v[arr[1]];
-    if (arr[3] != undefined) v = v[arr[3]];
+    if (arr[1] != undefined && arr[1] !== "") {
+      idx = arr[1]
+      parent = v;
+      v = v[idx];
+    }
+    if (arr[3] != undefined) {
+      idx = arr[3];
+      parent = v;
+      v = v[idx];
+    }
   }
-  return v;
+  return [parent, idx, v];
 }
 
 export function putValue(
   data: unknown,
   newValue: unknown,
   path?: string
-): unknown {
+): any {
   if (path == null || path === "$" || path === ".") {
-    if (newValue === undefined) data = newValue;
+    if (newValue !== undefined) data = newValue;
     return data;
   }
   const segments = path.split(".");
-  while (segments[0] === "$" || segments[0] === "") segments.shift();
-  const leaf = segments.pop();
-  if (leaf == undefined) {
-    data = newValue;
-    return data;
-  }
-  let branch = traverse(data, segments);
+  let [branch, leaf] = traverse(data, segments);
   branch[leaf] = newValue;
   return data;
 }
