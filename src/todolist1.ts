@@ -1,12 +1,12 @@
-import {LitElement, html, css} from 'lit';
-import {customElement, property, query} from 'lit/decorators.js';
+import {LitElement, html, css} from "lit";
+import {customElement, property, query} from "lit/decorators.js";
 
 type ToDoItem = {
   text: string;
   completed: boolean;
 };
 
-@customElement('todo-list-1')
+@customElement("todo-list-1")
 export class ToDoList extends LitElement {
   static get styles() {
     return css`
@@ -19,8 +19,8 @@ export class ToDoList extends LitElement {
 
   @property({attribute: false})
   listItems = [
-    {text: 'Make to do list', completed: true},
-    {text: 'Complete Lit on tutorial', completed: false},
+    {text: "Make to do list", completed: true},
+    {text: "Complete Lit on tutorial", completed: false},
   ];
   @property({type: Boolean})
   hideCompleted = false;
@@ -34,7 +34,7 @@ export class ToDoList extends LitElement {
         ${items.map(
           (item) =>
             html` <li
-              class=${item.completed ? 'completed' : ''}
+              class=${item.completed ? "completed" : ""}
               @click=${() => this.toggleCompleted(item)}
             >
               ${item.text}
@@ -71,12 +71,12 @@ export class ToDoList extends LitElement {
     this.hideCompleted = (e.target as HTMLInputElement).checked;
   }
 
-  @query('#newitem')
+  @query("#newitem")
   input!: HTMLInputElement;
 
   addToDo() {
     this.listItems.push({text: this.input.value, completed: false});
     this.requestUpdate();
-    this.input.value = '';
+    this.input.value = "";
   }
 }

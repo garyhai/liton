@@ -1,6 +1,6 @@
-import {html} from 'lit';
-import {customElement, query, property, state} from 'lit/decorators.js';
-import {putValue, RemoteModelBase} from './remoteview.js';
+import {html} from "lit";
+import {customElement, query, property, state} from "lit/decorators.js";
+import {putValue, RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
   command: string;
@@ -49,7 +49,7 @@ export interface VideoModel {
 
 const MIN_BUFFER_SIZE = 2_000_000;
 const MAX_GAP = 1;
-@customElement('sync-player')
+@customElement("sync-player")
 export class SyncPlayer extends RemoteModelBase {
   private mediaSource?: MediaSource;
   private mediaFile?: File;
@@ -82,13 +82,13 @@ export class SyncPlayer extends RemoteModelBase {
     fullScreen: false,
     bufferTime: 20,
   };
-  
+
   onOpen() {
     this.model.getData();
   }
 
   onUpdate(data: unknown, path?: string) {
-    console.log('virtual player is changed: ', data, path);
+    console.log("virtual player is changed: ", data, path);
     const {playing, syncing, fullScreen, source} = this.vPlayer;
     putValue(this.vPlayer, data, path);
     if (!isSameSource(this.vPlayer.source, source)) {
@@ -117,10 +117,10 @@ export class SyncPlayer extends RemoteModelBase {
       if (fullScreen && document.fullscreenElement) {
         document.exitFullscreen();
       } else {
-        const controls = this.vPlayer.controls ? 'show' : 'hide';
+        const controls = this.vPlayer.controls ? "show" : "hide";
         this.videoPlayer
           .requestFullscreen({navigationUI: controls})
-          .catch((e) => console.error('failed to switch fullscreen mode: ', e));
+          .catch((e) => console.error("failed to switch fullscreen mode: ", e));
       }
     }
     this.requestUpdate();
@@ -174,10 +174,10 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
-  @query('#videoFile')
+  @query("#videoFile")
   videoFile!: HTMLInputElement;
 
-  @query('#videoPlayer')
+  @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
 
   closeVideo() {
@@ -185,7 +185,7 @@ export class SyncPlayer extends RemoteModelBase {
       this.sourceBuffer?.abort();
       this.mediaSource?.endOfStream();
     } catch (e) {
-      console.error('exception when video closing:', e);
+      console.error("exception when video closing:", e);
     }
     this.mediaSource = undefined;
     this.sourceBuffer = undefined;
@@ -200,21 +200,21 @@ export class SyncPlayer extends RemoteModelBase {
 
   setViewerControls(ev: Event) {
     const controls = (ev.target as HTMLInputElement).checked;
-    this.model.setData(controls, 'controls');
+    this.model.setData(controls, "controls");
   }
 
   syncSeek() {
     const {syncing} = this.vPlayer;
     const gap = Math.abs(this.videoPlayer.currentTime - syncing);
     if (gap > this.maxGap) {
-      console.log('sync the gap:', gap);
+      console.log("sync the gap:", gap);
       this.videoPlayer.currentTime = syncing;
     }
   }
 
   onHostPlay() {
     this.vPlayer.playing = true;
-    this.model.setData(true, 'playing');
+    this.model.setData(true, "playing");
   }
 
   onCanPlay() {
@@ -229,7 +229,7 @@ export class SyncPlayer extends RemoteModelBase {
       this.videoPlayer
         .play()
         .then(() => (this.toPlay = false))
-        .catch((e) => console.error('failed to play video:', e));
+        .catch((e) => console.error("failed to play video:", e));
     }
   }
 
@@ -237,13 +237,13 @@ export class SyncPlayer extends RemoteModelBase {
     this.videoPlayer.pause();
     if (this.isHost) {
       this.vPlayer.playing = false;
-      this.model.setData(false, 'playing');
+      this.model.setData(false, "playing");
     }
   }
 
   localLoadVideo() {
     this.closeVideo();
-    if (!this.videoPlayer || !this.videoFile || this.videoFile.value == '')
+    if (!this.videoPlayer || !this.videoFile || this.videoFile.value == "")
       return;
     this.isCaster = true;
     this.mediaFile = this.videoFile.files![0];
@@ -251,10 +251,10 @@ export class SyncPlayer extends RemoteModelBase {
     const fileSource = {name, size, type, lastModified};
     this.vPlayer.source = fileSource;
     this.mediaSource = new MediaSource();
-    this.mediaSource.addEventListener('sourceopen', () => this.onSourceOpen());
+    this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
     this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
     this.canPlay = false;
-    this.model.setData(fileSource, 'source');
+    this.model.setData(fileSource, "source");
     this.requestUpdate();
   }
 
@@ -262,7 +262,7 @@ export class SyncPlayer extends RemoteModelBase {
     this.closeVideo();
     if (this.vPlayer.source == null) return;
     this.mediaSource = new MediaSource();
-    this.mediaSource.addEventListener('sourceopen', () => this.onSourceOpen());
+    this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
     this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
     this.requestUpdate();
   }
@@ -271,7 +271,7 @@ export class SyncPlayer extends RemoteModelBase {
     // const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     // this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeCodec);
     this.sourceBuffer = this.mediaSource!.addSourceBuffer(this.mediaFile!.type);
-    this.sourceBuffer.addEventListener('updateend', () => this.doBuffer());
+    this.sourceBuffer.addEventListener("updateend", () => this.doBuffer());
     await this.fillBuffer(0);
   }
 
@@ -307,7 +307,7 @@ export class SyncPlayer extends RemoteModelBase {
       this.received += data.byteLength;
       this.doBuffer(data);
     } else {
-      console.error('received unexpected streaming data as a caster');
+      console.error("received unexpected streaming data as a caster");
     }
   }
 
@@ -333,16 +333,16 @@ export class SyncPlayer extends RemoteModelBase {
 
   onSeeking() {
     if (!this.mediaSource || !this.sourceBuffer) return;
-    if (this.mediaSource.readyState === 'open') {
+    if (this.mediaSource.readyState === "open") {
       // this.sourceBuffer.abort();
       console.log(this.mediaSource.readyState);
     } else {
-      console.log('seek but not open?');
+      console.log("seek but not open?");
       console.log(this.mediaSource.readyState);
       return;
     }
     const info = {
-      command: 'sync',
+      command: "sync",
       param: this.videoPlayer.currentTime,
     };
     this.model.multicast(info);

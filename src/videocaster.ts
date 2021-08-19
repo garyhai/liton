@@ -1,6 +1,6 @@
-import {html} from 'lit';
-import {customElement, query, property} from 'lit/decorators.js';
-import {RemoteModelBase} from './remoteview.js';
+import {html} from "lit";
+import {customElement, query, property} from "lit/decorators.js";
+import {RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
   command: string;
@@ -13,7 +13,7 @@ export interface VideoSource {
   size: number;
 }
 
-@customElement('video-caster')
+@customElement("video-caster")
 export class Videocaster extends RemoteModelBase {
   private mediaSource?: MediaSource;
   private mediaFile?: File;
@@ -64,10 +64,10 @@ export class Videocaster extends RemoteModelBase {
     `;
   }
 
-  @query('#videoFile')
+  @query("#videoFile")
   videoFile!: HTMLInputElement;
 
-  @query('#videoPlayer')
+  @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
 
   closeVideo() {
@@ -81,9 +81,9 @@ export class Videocaster extends RemoteModelBase {
 
   setViewerControls(ev: Event) {
     this.viewerControls = (ev.target as HTMLInputElement).checked;
-    console.log('set controls to:', this.viewerControls);
+    console.log("set controls to:", this.viewerControls);
     const command = {
-      command: 'controls',
+      command: "controls",
       param: this.viewerControls ? 1 : 0,
     };
     this.model.multicast(command);
@@ -91,7 +91,7 @@ export class Videocaster extends RemoteModelBase {
 
   async playVideo() {
     const command = {
-      command: 'play',
+      command: "play",
     };
     this.model.multicast(command);
     await this.videoPlayer.play();
@@ -99,7 +99,7 @@ export class Videocaster extends RemoteModelBase {
 
   pauseVideo() {
     const command = {
-      command: 'pause',
+      command: "pause",
     };
     this.model.multicast(command);
     this.videoPlayer.pause();
@@ -107,17 +107,17 @@ export class Videocaster extends RemoteModelBase {
 
   loadVideo() {
     this.closeVideo();
-    if (!this.videoPlayer || !this.videoFile || this.videoFile.value == '')
+    if (!this.videoPlayer || !this.videoFile || this.videoFile.value == "")
       return;
     this.mediaFile = this.videoFile.files![0];
     const {name, size, type} = this.mediaFile;
     const info = {
-      command: 'prepare',
+      command: "prepare",
       param: {name, size, type},
     };
     this.model.multicast(info);
     this.mediaSource = new MediaSource();
-    this.mediaSource.addEventListener('sourceopen', async () =>
+    this.mediaSource.addEventListener("sourceopen", async () =>
       this.onSourceOpen()
     );
     this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
@@ -138,7 +138,7 @@ export class Videocaster extends RemoteModelBase {
   async onTimeUpdate() {
     if (this.videoPlayer.currentTime % this.syncInterval) {
       const info = {
-        command: 'sync',
+        command: "sync",
         param: this.videoPlayer.currentTime,
       };
       this.model.multicast(info);
@@ -160,16 +160,16 @@ export class Videocaster extends RemoteModelBase {
 
   onSeeking() {
     if (!this.mediaSource || !this.sourceBuffer) return;
-    if (this.mediaSource.readyState === 'open') {
+    if (this.mediaSource.readyState === "open") {
       // this.sourceBuffer.abort();
       console.log(this.mediaSource.readyState);
     } else {
-      console.log('seek but not open?');
+      console.log("seek but not open?");
       console.log(this.mediaSource.readyState);
       return;
     }
     const info = {
-      command: 'sync',
+      command: "sync",
       param: this.videoPlayer.currentTime,
     };
     this.model.multicast(info);

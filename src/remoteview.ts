@@ -1,7 +1,6 @@
-import jp from 'jsonpath';
-import {LitElement} from 'lit';
-import {property} from 'lit/decorators.js';
-import {ModelController, RemoteModelHost} from './model-controller.js';
+import {LitElement} from "lit";
+import {property} from "lit/decorators.js";
+import {ModelController, RemoteModelHost} from "./model-controller.js";
 
 export function makeModelUrl(
   urlOrPath: string,
@@ -10,7 +9,7 @@ export function makeModelUrl(
   port?: string
 ): string {
   if (!host) {
-    host = `${window.location.protocol === 'https:' ? 'wss://' : 'ws://'}${
+    host = `${window.location.protocol === "https:" ? "wss://" : "ws://"}${
       window.location.hostname
     }`;
   }
@@ -27,15 +26,15 @@ export abstract class RemoteModelBase
 {
   // Create the controller and store it
   @property()
-  modelUrl = '';
+  modelUrl = "";
   @property()
-  wsPath = '/ws/model';
+  wsPath = "/ws/model";
   @property()
-  modelName = 'todolist';
+  modelName = "todolist";
   @property()
-  remoteHost = '';
+  remoteHost = "";
   @property()
-  remotePort = '8080';
+  remotePort = "8080";
 
   protected model: ModelController;
 
@@ -53,10 +52,24 @@ export abstract class RemoteModelBase
   }
 }
 
-export function getValue(data: unknown, path: string): unknown {
-  if (path == null || path === '$' || path === '.') return data;
-  if (path.startsWith('.')) path = '$' + path;
-  return jp.value(data, path);
+export function getValue(data: any, path?: string): any {
+  if (path == null || path === "$" || path === ".") return data;
+  traverse(data, path.split("."));
+}
+
+export function traverse(data: any, path: string[]): any {
+  while (path[0] === "$" || path[0] === "") path.shift();
+  if (!path.length) return data;
+  const r = /([^\[]+)(\[(\d+)\])?/;
+  let v = data;
+  for (const key of path) {
+    const arr = key.match(r);
+    if (!arr || arr[1] == undefined)
+      throw new Error(`failed to parse path: ${path}`);
+    v = v[arr[1]];
+    if (arr[3] != undefined) v = v[arr[3]];
+  }
+  return v;
 }
 
 export function putValue(
@@ -64,10 +77,18 @@ export function putValue(
   newValue: unknown,
   path?: string
 ): unknown {
-  if (path == null || path === '$' || path === '.') {
+  if (path == null || path === "$" || path === ".") {
     if (newValue === undefined) data = newValue;
     return data;
   }
-  if (!path.startsWith('$')) path = '$.' + path;
-  return jp.value(data, path, newValue);
+  const segments = path.split(".");
+  while (segments[0] === "$" || segments[0] === "") segments.shift();
+  const leaf = segments.pop();
+  if (leaf == undefined) {
+    data = newValue;
+    return data;
+  }
+  let branch = traverse(data, segments);
+  branch[leaf] = newValue;
+  return data;
 }

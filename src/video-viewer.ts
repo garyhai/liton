@@ -1,9 +1,9 @@
-import {html} from 'lit';
-import {customElement, property, query} from 'lit/decorators.js';
-import {RemoteModelBase} from './remoteview.js';
-import {RemoteCommand, VideoSource} from './videocaster.js';
+import {html} from "lit";
+import {customElement, property, query} from "lit/decorators.js";
+import {RemoteModelBase} from "./remoteview.js";
+import {RemoteCommand, VideoSource} from "./videocaster.js";
 
-@customElement('video-viewer')
+@customElement("video-viewer")
 export class VideoViewer extends RemoteModelBase {
   private source?: VideoSource;
   private mediaSource?: MediaSource;
@@ -25,29 +25,29 @@ export class VideoViewer extends RemoteModelBase {
     `;
   }
 
-  @query('#videoPlayer')
+  @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
 
   onMulticast(data: unknown[]) {
     const {command, param} = data[0] as RemoteCommand;
     switch (command) {
-      case 'prepare':
+      case "prepare":
         return this.loadVideo(param as VideoSource);
-      case 'play':
+      case "play":
         return this.videoPlayer.play().then(() => {});
-      case 'pause':
+      case "pause":
         return this.videoPlayer.pause();
-      case 'sync': {
+      case "sync": {
         const hostTime = param as number;
         const lag = Math.abs(this.videoPlayer.currentTime - hostTime);
         if (lag > this.maxLag) {
-          console.log('lagged: ', lag);
+          console.log("lagged: ", lag);
           this.videoPlayer.currentTime = hostTime;
           // this.sourceBuffer!.abort();
         }
         break;
       }
-      case 'controls':
+      case "controls":
         return this.setControls(param as number);
       default:
         throw new Error(`unknown command: ${data}`);
@@ -55,7 +55,7 @@ export class VideoViewer extends RemoteModelBase {
   }
 
   setControls(param: number | boolean) {
-    console.log('set controls:', !!param, param);
+    console.log("set controls:", !!param, param);
     this.videoPlayer.controls = !!param;
   }
 
@@ -73,16 +73,16 @@ export class VideoViewer extends RemoteModelBase {
     this.closeVideo();
     this.source = source;
     this.mediaSource = new MediaSource();
-    this.mediaSource.addEventListener('sourceopen', () => this.onSourceOpen());
+    this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
     this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
     this.requestUpdate();
   }
 
   onSourceOpen() {
-    console.log('open viewver video:', this.source);
+    console.log("open viewver video:", this.source);
     const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
     this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeCodec); //this.source!.type);
-    this.sourceBuffer.addEventListener('updateend', () => this.tryUpdate());
+    this.sourceBuffer.addEventListener("updateend", () => this.tryUpdate());
     this.tryUpdate();
   }
 

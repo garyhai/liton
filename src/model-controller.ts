@@ -1,4 +1,4 @@
-import {ReactiveController, ReactiveControllerHost} from 'lit';
+import {ReactiveController, ReactiveControllerHost} from "lit";
 
 export function isRpcRequest(
   data: RpcRequest | RpcResponse
@@ -8,19 +8,19 @@ export function isRpcRequest(
 
 function rpcGetData(path?: string): string {
   const rpc = {
-    jsonrpc: '2.0',
-    method: 'get',
-    params: [path ?? '.'],
-    id: path ?? '.',
+    jsonrpc: "2.0",
+    method: "get",
+    params: [path ?? "."],
+    id: path ?? ".",
   };
   return JSON.stringify(rpc);
 }
 
 function rpcSetData(data: unknown, path?: string): string {
   const rpc = {
-    jsonrpc: '2.0',
-    method: 'set',
-    params: [data, path ?? '.'],
+    jsonrpc: "2.0",
+    method: "set",
+    params: [data, path ?? "."],
     id: null,
   };
   return JSON.stringify(rpc);
@@ -28,9 +28,9 @@ function rpcSetData(data: unknown, path?: string): string {
 
 function rpcMulticast(data: unknown, path?: string): string {
   const rpc = {
-    jsonrpc: '2.0',
-    method: 'MULTICAST',
-    params: [data, path ?? '.'],
+    jsonrpc: "2.0",
+    method: "MULTICAST",
+    params: [data, path ?? "."],
   };
   return JSON.stringify(rpc);
 }
@@ -64,18 +64,18 @@ export class ModelController implements ReactiveController {
   }
 
   getData(path?: string) {
-    if (!this.conn) throw new Error('disconnected');
+    if (!this.conn) throw new Error("disconnected");
     const req = rpcGetData(path);
     this.conn.send(req);
   }
 
   setData(value: unknown, path?: string) {
-    if (!this.conn) throw new Error('disconnected');
+    if (!this.conn) throw new Error("disconnected");
     this.conn.send(rpcSetData(value, path));
   }
 
   streaming(data: ArrayBuffer) {
-    if (!this.conn) throw new Error('disconnected');
+    if (!this.conn) throw new Error("disconnected");
     const total = data.byteLength;
     if (total < this.maxSize) return this.conn.send(data);
     let offset = 0;
@@ -88,7 +88,7 @@ export class ModelController implements ReactiveController {
   }
 
   multicast(value: unknown, path?: string) {
-    if (!this.conn) throw new Error('disconnected');
+    if (!this.conn) throw new Error("disconnected");
     this.conn.send(rpcMulticast(value, path));
   }
 
@@ -117,13 +117,13 @@ export class ModelController implements ReactiveController {
         this.host
           .onStreaming(ev.data)
           .then(() => {})
-          .catch((err) => console.log('streaming error', err));
+          .catch((err) => console.log("streaming error", err));
       return;
     }
     const data: RpcRequest | RpcResponse = JSON.parse(ev.data);
     if (isRpcRequest(data)) {
       switch (data.method) {
-        case 'UPDATE': {
+        case "UPDATE": {
           if (this.host.onUpdate && Array.isArray(data.params)) {
             const value = data.params[3];
             const path = data.params[2] as string;
@@ -131,7 +131,7 @@ export class ModelController implements ReactiveController {
           }
           break;
         }
-        case 'MULTICAST': {
+        case "MULTICAST": {
           if (this.host.onMulticast) this.host.onMulticast(data.params);
           break;
         }
@@ -161,14 +161,14 @@ export class ModelController implements ReactiveController {
 }
 
 export interface RpcRequest {
-  jsonrpc: '2.0';
+  jsonrpc: "2.0";
   method: string;
   params?: Array<unknown> | Record<string, unknown>;
   id?: string | number;
 }
 
 export interface RpcResponse {
-  jsonrpc: '2.0';
+  jsonrpc: "2.0";
   result?: unknown;
   error?: ErrorData;
   id: string | number | null;

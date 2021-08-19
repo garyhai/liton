@@ -1,13 +1,13 @@
-import {html, css} from 'lit';
-import {customElement, property, query} from 'lit/decorators.js';
-import {putValue, RemoteModelBase} from './remoteview.js';
+import {html, css} from "lit";
+import {customElement, property, query} from "lit/decorators.js";
+import {putValue, RemoteModelBase} from "./remoteview.js";
 
 type ToDoItem = {
   text: string;
   completed: boolean;
 };
 
-@customElement('todo-list')
+@customElement("todo-list")
 export class ToDoList extends RemoteModelBase {
   static get styles() {
     return css`
@@ -19,7 +19,7 @@ export class ToDoList extends RemoteModelBase {
   }
 
   onUpdate(data: unknown, path?: string) {
-    console.log('onupdate: ', data, path);
+    console.log("onupdate: ", data, path);
     putValue(this.listItems, data, path);
     this.requestUpdate();
   }
@@ -36,7 +36,7 @@ export class ToDoList extends RemoteModelBase {
         ${this.listItems.map(
           (item, pos) =>
             html` <li
-              class=${item.completed ? 'completed' : ''}
+              class=${item.completed ? "completed" : ""}
               @click=${() => this.toggleCompleted(item, pos)}
             >
               ${item.text}
@@ -59,13 +59,13 @@ export class ToDoList extends RemoteModelBase {
     this.requestUpdate();
   }
 
-  @query('#newitem')
+  @query("#newitem")
   input!: HTMLInputElement;
 
   addToDo() {
     this.listItems.push({text: this.input.value, completed: false});
     this.model.setData(this.listItems);
     this.requestUpdate();
-    this.input.value = '';
+    this.input.value = "";
   }
 }
