@@ -281,12 +281,12 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   onSourceOpen() {
-    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-    // const mimeCodec = this.vPlayer.source?.type;
-    // if (mimeCodec == undefined) {
-    //   console.error("unknown media type");
-    //   return;
-    // }
+    // const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    const mimeCodec = this.vPlayer.source?.type;
+    if (mimeCodec == undefined) {
+      console.error("unknown media type");
+      return;
+    }
     this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeCodec);
     this.sourceBuffer.addEventListener("updateend", () => this.doBuffer());
     if (this.isCaster) {
@@ -296,14 +296,9 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
-  doBuffer(data?: ArrayBuffer) {
-    if (data && (this.buffers.length || !this.sourceBuffer)) {
-      this.buffers.push(data);
-      console.log("buffering: ", data.byteLength);
-      data = undefined;
-    }
+  doBuffer() {
     while (this.sourceBuffer && !this.sourceBuffer.updating) {
-      if (!data) data = this.buffers[0];
+      const data = this.buffers[0];
       if (!data) break;
       try {
         this.sourceBuffer!.appendBuffer(data);
@@ -312,7 +307,6 @@ export class SyncPlayer extends RemoteModelBase {
         console.log("data is full", this.buffers.length);
         return;
       }
-      data = undefined;
     }
   }
 
@@ -323,7 +317,8 @@ export class SyncPlayer extends RemoteModelBase {
       const chunk = await blob.arrayBuffer();
       this.bufferRange = [position, position + chunk.byteLength];
       this.model.streaming(chunk);
-      this.doBuffer(chunk);
+      this.buffers.push(chunk);
+      this.doBuffer();
     }
   }
 
@@ -339,7 +334,8 @@ export class SyncPlayer extends RemoteModelBase {
 
   async onTimeUpdate() {
     if (!this.isCaster) return;
-    if (this.videoPlayer.currentTime % this.vPlayer.syncInterval == 0) {
+    if ((this.videoPlayer.currentTime % this.vPlayer.syncInterval) < 0.5) {
+      console.log("sync on time");
       this.vPlayer.syncing = this.videoPlayer.currentTime;
       this.model.setData(this.vPlayer.syncing, "syncing");
     }
