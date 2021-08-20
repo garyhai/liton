@@ -1,5 +1,5 @@
 import {html} from "lit";
-import {customElement, query, property, state} from "lit/decorators.js";
+import {customElement, query, property} from "lit/decorators.js";
 import {putValue, RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
@@ -48,7 +48,7 @@ export interface VideoModel {
 }
 
 const MIN_BUFFER_SIZE = 2_000_000;
-const MAX_GAP = 2;
+const MAX_GAP = 3;
 @customElement("sync-player")
 export class SyncPlayer extends RemoteModelBase {
   private mediaSource?: MediaSource;
@@ -67,8 +67,8 @@ export class SyncPlayer extends RemoteModelBase {
   @property({type: Number})
   maxGap = MAX_GAP;
 
-  @state()
-  private vPlayer: VideoModel = {
+  @property({type: Object})
+  vPlayer: VideoModel = {
     duration: 0,
     sync: true,
     syncInterval: 10,
@@ -92,7 +92,7 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   onUpdate(data: unknown, path?: string) {
-    const {playing, syncing, fullScreen, source} = this.vPlayer;
+    const {playing, syncing, fullScreen, source, muted} = this.vPlayer;
     putValue(this.vPlayer, data, path);
     if (!isSameSource(this.vPlayer.source, source)) {
       this.remoteLoadVideo();
@@ -103,6 +103,10 @@ export class SyncPlayer extends RemoteModelBase {
       } else {
         this.playVideo();
       }
+    }
+    if (this.vPlayer.muted !== muted) {
+      console.log("change muted from ", muted)
+      this.videoPlayer.muted = this.vPlayer.muted;
     }
     if (this.vPlayer.sync && this.vPlayer.syncing !== syncing) {
       this.syncSeek();
@@ -133,7 +137,6 @@ export class SyncPlayer extends RemoteModelBase {
         <video
           id="videoPlayer"
           controls
-          ?muted=${this.vPlayer.muted}
           ?loop=${this.vPlayer.loop}
           ?autoplay=${this.vPlayer.autoplay}
           @timeupdate=${this.onTimeUpdate}
@@ -141,7 +144,9 @@ export class SyncPlayer extends RemoteModelBase {
           @seeking=${this.onSeeking}
           @play=${this.onHostPlay}
           @pause=${this.pauseVideo}
+          @volumechange=${this.onVolumeChange}
         ></video>
+        <br>
         <label>
           <input
             type="file"
@@ -150,13 +155,13 @@ export class SyncPlayer extends RemoteModelBase {
             @change=${this.localLoadVideo}
           />
         </label>
+        <br>
         <label>
           <input
             type="checkbox"
             ?checked=${this.vPlayer.controls}
             @change=${this.setViewerControls}
-          />
-          允许远端控制
+          />允许远端控制
         </label>
       `;
     } else {
@@ -164,7 +169,6 @@ export class SyncPlayer extends RemoteModelBase {
         <video
           id="videoPlayer"
           ?controls=${this.vPlayer.controls}
-          ?muted=${this.vPlayer.muted}
           ?loop=${this.vPlayer.loop}
           ?autoplay=${this.vPlayer.autoplay}
           @canplay=${this.onCanPlay}
@@ -230,6 +234,16 @@ export class SyncPlayer extends RemoteModelBase {
       console.log("buffer size:", this.bufferSize);
     } else if (this.toPlay) {
       this.playVideo();
+    }
+  }
+
+  onVolumeChange() {
+    console.log("volume changed", this.videoPlayer.volume);
+    if (this.isHost) {
+      if (this.videoPlayer.muted !== this.vPlayer.muted) {
+        this.vPlayer.muted = this.videoPlayer.muted;
+        this.model.setData(this.vPlayer.muted, "muted");
+      }
     }
   }
 
@@ -334,7 +348,8 @@ export class SyncPlayer extends RemoteModelBase {
 
   async onTimeUpdate() {
     if (!this.isCaster) return;
-    if ((this.videoPlayer.currentTime % this.vPlayer.syncInterval) < 0.5) {
+    // 0.25, 4Hz
+    if ((this.videoPlayer.currentTime % this.vPlayer.syncInterval) < 0.3) {
       console.log("sync on time");
       this.vPlayer.syncing = this.videoPlayer.currentTime;
       this.model.setData(this.vPlayer.syncing, "syncing");
