@@ -6,35 +6,6 @@ export function isRpcRequest(
   return (data as RpcRequest).method !== undefined;
 }
 
-function rpcGetData(path?: string): string {
-  const rpc = {
-    jsonrpc: "2.0",
-    method: "get",
-    params: [path ?? "."],
-    id: path ?? ".",
-  };
-  return JSON.stringify(rpc);
-}
-
-function rpcSetData(data: unknown, path?: string): string {
-  const rpc = {
-    jsonrpc: "2.0",
-    method: "set",
-    params: [data, path ?? "."],
-    id: null,
-  };
-  return JSON.stringify(rpc);
-}
-
-function rpcMulticast(data: unknown, path?: string): string {
-  const rpc = {
-    jsonrpc: "2.0",
-    method: "MULTICAST",
-    params: [data, path ?? "."],
-  };
-  return JSON.stringify(rpc);
-}
-
 export interface RemoteModelHost extends ReactiveControllerHost {
   onUpdate?(data: unknown, path?: string): void;
   onMulticast?(data: unknown): void;
@@ -49,6 +20,8 @@ export class ModelController implements ReactiveController {
   wsUrl: string;
   private conn?: WebSocket;
   maxSize = 60000;
+  sequence = 0;
+  queue = new Map;
 
   constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
@@ -59,34 +32,56 @@ export class ModelController implements ReactiveController {
     this.disconnect();
   }
 
-  getData(path?: string) {
-    if (!this.conn) throw new Error("disconnected");
-    const req = rpcGetData(path);
-    console.log("data to sent", req);
-    this.conn.send(req);
+  invoke(method: string, ...params: unknown[]): Promise<unknown> {
+    if (this.conn == null || this.conn.readyState !== WebSocket.OPEN) {
+      return Promise.reject(new Error("disconnected"));
+    }
+    const rpc = {
+      method,
+      params,
+      jsonrpc: "2.0",
+      id: this.sequence++,
+    };
+    let cmd = JSON.stringify(rpc);
+    const later = new Promise((resolve, reject) => {
+      this.queue.set(rpc.id, [resolve, reject]);
+    });
+    this.conn!.send(cmd);
+    return later;
   }
 
-  setData(value: unknown, path?: string) {
-    if (!this.conn) throw new Error("disconnected");
-    this.conn.send(rpcSetData(value, path));
+  notify(method: string, ...params: unknown[]) {
+    const rpc = {
+      method,
+      params,
+      jsonrpc: "2.0",
+    };
+    this.conn?.send(JSON.stringify(rpc));
   }
-
+  
   streaming(data: ArrayBuffer) {
     if (!this.conn) throw new Error("disconnected");
-    const total = data.byteLength;
-    if (total < this.maxSize) return this.conn.send(data);
-    let offset = 0;
-    while (offset < total) {
-      const length = Math.min(this.maxSize, total - offset);
-      const block = new DataView(data, offset, length);
-      offset += length;
-      this.conn.send(block);
-    }
+    if (data.byteLength > this.maxSize) throw new Error(`data block is too big > ${this.maxSize}`);
+    this.conn.send(data);
+    // const total = data.byteLength;
+    // if (total < this.maxSize) return this.conn.send(data);
+    // let offset = 0;
+    // while (offset < total) {
+    //   const length = Math.min(this.maxSize, total - offset);
+    //   const block = new DataView(data, offset, length);
+    //   offset += length;
+    //   this.conn.send(block);
+    // }
   }
 
   multicast(value: unknown, path?: string) {
     if (!this.conn) throw new Error("disconnected");
-    this.conn.send(rpcMulticast(value, path));
+    this.notify("MULTICAST", value, path ?? ".");
+  }
+
+  broadcast(value: unknown, path?: string) {
+    if (!this.conn) throw new Error("disconnected");
+    this.notify("BROADCAST", value, path ?? ".");
   }
 
   connect(url?: string) {
@@ -132,9 +127,22 @@ export class ModelController implements ReactiveController {
         }
       }
     } else {
+      if (data.id !== undefined) return this.on_response(data);
       if (this.host.onUpdate && data.id) {
         this.host.onUpdate(data.result, data.id as string);
       }
+    }
+  }
+
+  private on_response(data: RpcResponse) {
+    const promise = this.queue.get(data.id);
+    if (promise == null) throw new Error(`Unknown response ${data}`);
+    this.queue.delete(data.id);
+    const [resolve, reject] = promise;
+    if (data.error != null) {
+      reject(new JsonRpcError(data.error));
+    } else {
+      resolve(data.result);
     }
   }
 
@@ -173,4 +181,15 @@ export interface ErrorData {
   code: number;
   message: string;
   data?: unknown;
+}
+
+export class JsonRpcError extends Error {
+  code: number;
+  data?: unknown;
+  constructor(errData: ErrorData) {
+    super(errData.message);
+    this.code = errData.code;
+    this.data = errData.data;
+    this.name = "JSONRPC 2.0 Error";
+  }
 }
