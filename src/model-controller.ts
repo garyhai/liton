@@ -21,7 +21,7 @@ export class ModelController implements ReactiveController {
   wsUrl: string;
   private conn?: WebSocket;
   maxSize = 60000;
-  sequence = 0;
+  sequence = 1;
   queue = new Map();
 
   constructor(host: RemoteModelHost, url?: string) {
@@ -116,7 +116,7 @@ export class ModelController implements ReactiveController {
       switch (data.method) {
         case "NOTIFY": {
           if (Array.isArray(data.params)) {
-            const [action, path, value] = data.params as any;
+            const [action, , path, value] = data.params as any;
             this.handle_notify(action, path, value);
           } else {
             const {action, path, value} = data.params as any;
