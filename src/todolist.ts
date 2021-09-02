@@ -1,5 +1,6 @@
 import {html, css} from "lit";
 import {customElement, property, query} from "lit/decorators.js";
+import {JsonRpcError} from "./model-controller.js";
 import {putValue, RemoteModelBase} from "./remoteview.js";
 
 type ToDoItem = {
@@ -46,12 +47,31 @@ export class ToDoList extends RemoteModelBase {
       </ul>
       <input id="newitem" aria-label="New item" @change=${this.addToDo} />
       <button @click=${this.addToDo}>Add</button>
-      <button @click=${this.refresh}>Reset</button>
+      <button @click=${this.refresh}>Refresh</button>
+      <button @click=${this.reset}>Reset</button>
     `;
   }
+  async onOpen() {
+    try {
+      await this.refresh();
+    } catch (e) {
+      if (e instanceof JsonRpcError) {
+        this.model.setData(this.listItems);
+      } else {
+        throw e;
+      }
+    }
+  }
 
-  refresh() {
-    this.model.getData();
+  async refresh() {
+    this.listItems = (await this.model.getData()) as ToDoItem[];
+    this.requestUpdate();
+  }
+
+  async reset() {
+    this.listItems = [];
+    this.model.setData([]);
+    this.requestUpdate();
   }
 
   toggleCompleted(item: ToDoItem, position: number) {

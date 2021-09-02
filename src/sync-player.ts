@@ -1,5 +1,6 @@
 import {html} from "lit";
 import {customElement, query, property} from "lit/decorators.js";
+import {JsonRpcError} from "./model-controller.js";
 import {putValue, RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
@@ -83,11 +84,16 @@ export class SyncPlayer extends RemoteModelBase {
     bufferTime: 20,
   };
 
-  onOpen() {
-    if (this.isHost) {
-      this.model.setData(this.vPlayer);
-    } else {
-      this.model.getData();
+  async onOpen() {
+    try {
+      const player = (await this.model.getData()) as VideoModel;
+      this.vPlayer = {...this.vPlayer, ...player};
+    } catch (e) {
+      if (e instanceof JsonRpcError && this.isHost) {
+        this.model.setData(this.vPlayer);
+      } else {
+        throw e;
+      }
     }
   }
 
@@ -105,7 +111,7 @@ export class SyncPlayer extends RemoteModelBase {
       }
     }
     if (this.vPlayer.muted !== muted) {
-      console.log("change muted from ", muted)
+      console.log("change muted from ", muted);
       this.videoPlayer.muted = this.vPlayer.muted;
     }
     if (this.vPlayer.sync && this.vPlayer.syncing !== syncing) {
@@ -146,7 +152,7 @@ export class SyncPlayer extends RemoteModelBase {
           @pause=${this.pauseVideo}
           @volumechange=${this.onVolumeChange}
         ></video>
-        <br>
+        <br />
         <label>
           <input
             type="file"
@@ -155,7 +161,7 @@ export class SyncPlayer extends RemoteModelBase {
             @change=${this.localLoadVideo}
           />
         </label>
-        <br>
+        <br />
         <label>
           <input
             type="checkbox"
@@ -349,7 +355,7 @@ export class SyncPlayer extends RemoteModelBase {
   async onTimeUpdate() {
     if (!this.isCaster) return;
     // 0.25, 4Hz
-    if ((this.videoPlayer.currentTime % this.vPlayer.syncInterval) < 0.3) {
+    if (this.videoPlayer.currentTime % this.vPlayer.syncInterval < 0.3) {
       console.log("sync on time");
       this.vPlayer.syncing = this.videoPlayer.currentTime;
       this.model.setData(this.vPlayer.syncing, "syncing");

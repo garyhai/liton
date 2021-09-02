@@ -8,6 +8,7 @@ export function isRpcRequest(
 
 export interface RemoteModelHost extends ReactiveControllerHost {
   onUpdate?(data: unknown, path?: string): void;
+  onNotify?(action: string, data: unknown, path?: string): void;
   onMulticast?(data: unknown): void;
   onStreaming?(data: Blob | ArrayBuffer): void;
   onOpen?(ev: Event): void;
@@ -21,7 +22,7 @@ export class ModelController implements ReactiveController {
   private conn?: WebSocket;
   maxSize = 60000;
   sequence = 0;
-  queue = new Map;
+  queue = new Map();
 
   constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
@@ -50,6 +51,17 @@ export class ModelController implements ReactiveController {
     return later;
   }
 
+  getData(path?: string): Promise<unknown> {
+    return this.invoke("GET", path ?? ".");
+  }
+
+  setData(value: unknown, path?: string) {
+    if (this.conn == null || this.conn.readyState !== WebSocket.OPEN) {
+      throw new Error("disconnected");
+    }
+    return this.notify("SET", value, path ?? ".");
+  }
+
   notify(method: string, ...params: unknown[]) {
     const rpc = {
       method,
@@ -58,20 +70,12 @@ export class ModelController implements ReactiveController {
     };
     this.conn?.send(JSON.stringify(rpc));
   }
-  
+
   streaming(data: ArrayBuffer) {
     if (!this.conn) throw new Error("disconnected");
-    if (data.byteLength > this.maxSize) throw new Error(`data block is too big > ${this.maxSize}`);
+    if (data.byteLength > this.maxSize)
+      throw new Error(`data block is too big > ${this.maxSize}`);
     this.conn.send(data);
-    // const total = data.byteLength;
-    // if (total < this.maxSize) return this.conn.send(data);
-    // let offset = 0;
-    // while (offset < total) {
-    //   const length = Math.min(this.maxSize, total - offset);
-    //   const block = new DataView(data, offset, length);
-    //   offset += length;
-    //   this.conn.send(block);
-    // }
   }
 
   multicast(value: unknown, path?: string) {
@@ -104,20 +108,19 @@ export class ModelController implements ReactiveController {
 
   onMessage(ev: MessageEvent) {
     if (ev.data instanceof ArrayBuffer) {
-      // const idData = await ev.data.slice(0, 4).arrayBuffer();
-      // const id = new Uint32Array(idData);
-      // const data = await ev.data.slice(4).arrayBuffer();
-      if (this.host.onStreaming)
-        return this.host.onStreaming(ev.data);
+      if (this.host.onStreaming) this.host.onStreaming(ev.data);
+      return;
     }
     const data: RpcRequest | RpcResponse = JSON.parse(ev.data);
     if (isRpcRequest(data)) {
       switch (data.method) {
-        case "UPDATE": {
-          if (this.host.onUpdate && Array.isArray(data.params)) {
-            const value = data.params[3];
-            const path = data.params[2] as string;
-            this.host.onUpdate(value, path);
+        case "NOTIFY": {
+          if (Array.isArray(data.params)) {
+            const [action, path, value] = data.params as any;
+            this.handle_notify(action, path, value);
+          } else {
+            const {action, path, value} = data.params as any;
+            this.handle_notify(action, path, value);
           }
           break;
         }
@@ -127,14 +130,28 @@ export class ModelController implements ReactiveController {
         }
       }
     } else {
-      if (data.id !== undefined) return this.on_response(data);
-      if (this.host.onUpdate && data.id) {
-        this.host.onUpdate(data.result, data.id as string);
-      }
+      return this.handle_response(data);
     }
   }
 
-  private on_response(data: RpcResponse) {
+  private handle_notify(action: string, path: string, data?: unknown[]) {
+    switch (action) {
+      case "JSON.SET":
+        if (this.host.onUpdate) this.host.onUpdate(data, path);
+        break;
+      case "JSON.DEL":
+        if (this.host.onUpdate) this.host.onUpdate(undefined, path);
+        break;
+      default:
+        if (this.host.onNotify) this.host.onNotify(action, data, path);
+    }
+  }
+
+  private handle_response(data: RpcResponse) {
+    if (data.id == undefined) {
+      console.warn("received response without ID", data);
+      return;
+    }
     const promise = this.queue.get(data.id);
     if (promise == null) throw new Error(`Unknown response ${data}`);
     this.queue.delete(data.id);
