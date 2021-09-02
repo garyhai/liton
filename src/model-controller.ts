@@ -62,6 +62,13 @@ export class ModelController implements ReactiveController {
     return this.notify("SET", value, path ?? ".");
   }
 
+  deleteData(path?: string) {
+    if (this.conn == null || this.conn.readyState !== WebSocket.OPEN) {
+      throw new Error("disconnected");
+    }
+    return this.notify("DEL", path ?? ".");
+  }
+
   notify(method: string, ...params: unknown[]) {
     const rpc = {
       method,

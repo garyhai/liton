@@ -94,7 +94,7 @@ export function putValue(
   path?: string
 ): any {
   if (path == null || path === "$" || path === ".") {
-    if (newValue !== undefined) data = newValue;
+    data = newValue;
     return data;
   }
   const segments = path.split(".");
