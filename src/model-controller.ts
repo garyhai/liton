@@ -171,6 +171,8 @@ export class ModelController implements ReactiveController {
   }
 
   onClose(ev: CloseEvent) {
+    this.queue.forEach(([, reject]) => reject(new Error("disconnected")));
+    this.queue.clear();
     this.conn = undefined;
     if (this.host.onClose) this.host.onClose(ev);
   }
