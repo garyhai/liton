@@ -49,8 +49,15 @@ export class ToDoList extends RemoteModelBase {
       <button @click=${this.addToDo}>Add</button>
       <button @click=${this.refresh}>Refresh</button>
       <button @click=${this.reset}>Reset</button>
+      <button @click=${this.bufferTest}>bufferTest</button>
     `;
   }
+
+  bufferTest() {
+    const data = new Blob(["hello", " ", "world", "!"]);
+    this.model.buffering(data, 1, 10);
+  }
+
   async onOpen() {
     try {
       await this.refresh();

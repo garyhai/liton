@@ -78,6 +78,24 @@ export class ModelController implements ReactiveController {
     this.conn?.send(JSON.stringify(rpc));
   }
 
+  buffering(data: Blob, id: number, offset?: number) {
+    if (!this.conn) throw new Error("disconnected");
+    offset ??= 0;
+    let sent = 0;
+    let rest = data.size;
+    do {
+      const head = new DataView(new ArrayBuffer(8));
+      head.setUint32(0, id);
+      head.setUint32(4, offset);
+      let length = Math.min(rest, this.maxSize);
+      const block = new Blob([head, data.slice(sent, sent + length)]);
+      this.conn.send(block);
+      sent += length;
+      rest -= length;
+      offset += length;
+    } while (rest > 0);
+  }
+
   streaming(data: ArrayBuffer) {
     if (!this.conn) throw new Error("disconnected");
     if (data.byteLength > this.maxSize)
