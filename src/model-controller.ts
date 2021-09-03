@@ -6,6 +6,18 @@ export function isRpcRequest(
   return (data as RpcRequest).method !== undefined;
 }
 
+export interface FileInfo {
+  name: string;
+  mimeType: string;
+  size: number;
+  lastModified: number;
+}
+
+export interface StripeFile {
+  id: number;
+  url: string;
+}
+
 export interface RemoteModelHost extends ReactiveControllerHost {
   onUpdate?(data: unknown, path?: string): void;
   onNotify?(action: string, data: unknown, path?: string): void;
@@ -76,6 +88,10 @@ export class ModelController implements ReactiveController {
       jsonrpc: "2.0",
     };
     this.conn?.send(JSON.stringify(rpc));
+  }
+
+  createFileBuffer(info: FileInfo): Promise<StripeFile> {
+    return this.invoke("INSTANT_FILE", info) as Promise<StripeFile>;
   }
 
   buffering(data: Blob, id: number, offset?: number) {

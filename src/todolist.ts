@@ -49,13 +49,28 @@ export class ToDoList extends RemoteModelBase {
       <button @click=${this.addToDo}>Add</button>
       <button @click=${this.refresh}>Refresh</button>
       <button @click=${this.reset}>Reset</button>
-      <button @click=${this.bufferTest}>bufferTest</button>
+      <br />
+        <label>
+          <input
+            type="file"
+            id="instantFile"
+            name="selectFile"
+            @change=${this.bufferTest}
+          />
+        </label>
+
     `;
   }
+  @query("#instantFile")
+  instantFile!: HTMLInputElement;
 
-  bufferTest() {
-    const data = new Blob(["hello", " ", "world", "!"]);
-    this.model.buffering(data, 1, 10);
+  async bufferTest() {
+    const file = this.instantFile.files![0];
+    const {name, type: mimeType, size, lastModified} = file;
+    const info = {name, mimeType, size, lastModified};
+    const handle = await this.model.createFileBuffer(info);
+    console.log("stripe file:", handle);
+    this.model.buffering(file, handle.id, 0);
   }
 
   async onOpen() {

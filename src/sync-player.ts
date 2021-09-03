@@ -1,23 +1,16 @@
 import {html} from "lit";
 import {customElement, query, property} from "lit/decorators.js";
-import {JsonRpcError} from "./model-controller.js";
+import {FileInfo, JsonRpcError} from "./model-controller.js";
 import {putValue, RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
   command: string;
-  param?: number | VideoSource;
-}
-
-export interface VideoSource {
-  name: string;
-  type: string;
-  size: number;
-  lastModified: number;
+  param?: number | FileInfo;
 }
 
 function isSameSource(
-  s1: VideoSource | undefined,
-  s2: VideoSource | undefined
+  s1: FileInfo | undefined,
+  s2: FileInfo | undefined
 ): boolean {
   if (s1 == s2) return true;
   return (
@@ -26,7 +19,7 @@ function isSameSource(
     s1.name == s2.name &&
     s1.lastModified == s2.lastModified &&
     s1.size == s2.size &&
-    s1.type == s2.type
+    s1.mimeType == s2.mimeType
   );
 }
 
@@ -42,7 +35,7 @@ export interface VideoModel {
   pip: boolean;
   bufferTime: number;
   fullScreen: boolean;
-  source?: VideoSource;
+  source?: FileInfo;
   duration?: number;
   width?: number;
   height?: number;
@@ -279,8 +272,8 @@ export class SyncPlayer extends RemoteModelBase {
       return;
     this.isCaster = true;
     this.mediaFile = this.videoFile.files![0];
-    const {name, size, type, lastModified} = this.mediaFile;
-    const fileSource = {name, size, type, lastModified};
+    const {name, size, type: mimeType, lastModified} = this.mediaFile;
+    const fileSource = {name, size, mimeType, lastModified};
     this.vPlayer.source = fileSource;
     this.mediaSource = new MediaSource();
     this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
@@ -302,7 +295,7 @@ export class SyncPlayer extends RemoteModelBase {
 
   onSourceOpen() {
     // const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
-    const mimeCodec = this.vPlayer.source?.type;
+    const mimeCodec = this.vPlayer.source?.mimeType;
     if (mimeCodec == undefined) {
       console.error("unknown media type");
       return;
