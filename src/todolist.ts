@@ -78,7 +78,7 @@ export class ToDoList extends RemoteModelBase {
     this.model.buffering(file, handle.id, 0);
     this.videoPlayer.src = handle.url;
     // this.videoSource.type = file.type;
-    this.requestUpdate();
+    // this.requestUpdate();
   }
 
   async onOpen() {

@@ -156,6 +156,7 @@ export class ModelController implements ReactiveController {
     if (isRpcRequest(data)) {
       switch (data.method) {
         case "NOTIFY": {
+          console.log("received notification:", data);
           if (Array.isArray(data.params)) {
             const [action, , path, value] = data.params as any;
             this.handle_notify(action, path, value);
