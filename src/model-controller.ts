@@ -32,9 +32,10 @@ export class ModelController implements ReactiveController {
   host: RemoteModelHost;
   wsUrl: string;
   private conn?: WebSocket;
-  maxSize = 60000;
+  maxSize = 60_000;
   sequence = 1;
   queue = new Map();
+  backlog = 2_000_000;
 
   constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
@@ -94,22 +95,32 @@ export class ModelController implements ReactiveController {
     return this.invoke("INSTANT_FILE", info) as Promise<StripeFile>;
   }
 
-  buffering(data: Blob, id: number, offset?: number) {
-    if (!this.conn) throw new Error("disconnected");
+  buffering(data: Blob, id: number, offset?: number): Blob | undefined {
+    if (this.conn == null || this.conn.readyState !== WebSocket.OPEN) {
+      throw new Error("disconnected");
+    }
+    let cap = this.backlog - this.conn.bufferedAmount;
+    if (cap <= 0) return data;
+    let rest = undefined;
+    if (cap < data.size) {
+      rest = data.slice(cap);
+      data = data.slice(0, cap);
+    }
     offset ??= 0;
     let sent = 0;
-    let rest = data.size;
+    let toSend = data.size;
     do {
       const head = new DataView(new ArrayBuffer(8));
       head.setUint32(0, id);
       head.setUint32(4, offset);
-      let length = Math.min(rest, this.maxSize);
+      let length = Math.min(toSend, this.maxSize);
       const block = new Blob([head, data.slice(sent, sent + length)]);
       this.conn.send(block);
       sent += length;
-      rest -= length;
+      toSend -= length;
       offset += length;
-    } while (rest > 0);
+    } while (toSend > 0);
+    return rest;
   }
 
   streaming(data: ArrayBuffer) {

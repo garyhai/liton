@@ -34,8 +34,7 @@ export interface VideoModel {
   height?: number;
 }
 
-const MIN_BUFFER_SIZE = 20_000_000;
-const MAX_GAP = 3;
+const MAX_GAP = 2;
 @customElement("sync-player")
 export class SyncPlayer extends RemoteModelBase {
   private mediaFile?: File;
@@ -44,19 +43,12 @@ export class SyncPlayer extends RemoteModelBase {
   private toPlay = false;
   private isCaster = false;
 
-  private stripes = new Set;
-  private chunkSize = 0;
-  private chunkTime = 0;
-
   @property({type: Boolean})
   isHost = false;
   @property({type: Number})
   maxGap = MAX_GAP;
   @property({type: Number})
-  bufferInterval = 30; // 30 seconds
-  @property({type: Number})
-  minChunkSize = MIN_BUFFER_SIZE; // 2M bytes
-
+  bufferInterval = 50;
 
   @property({type: Object})
   vPlayer: VideoModel = {
@@ -170,10 +162,13 @@ export class SyncPlayer extends RemoteModelBase {
       return html`
         <video
           id="videoPlayer"
+          preload="metadata"
           ?controls=${this.vPlayer.controls}
           ?loop=${this.vPlayer.loop}
           ?autoplay=${this.vPlayer.autoplay}
           @canplay=${this.onCanPlay}
+          @loadeddata=${this.onLoadedData}
+          @loadedmetadata=${this.onLoadedMetaata}
         ></video>
         <h3>已收到的数据长度：${this.received}</h3>
       `;
@@ -186,6 +181,14 @@ export class SyncPlayer extends RemoteModelBase {
   @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
 
+  onLoadedData() {
+    console.log("loaded first frame");
+  }
+
+  onLoadedMetaata() {
+    console.log("metadata loaded", this.videoPlayer.duration);
+  }
+
   closeVideo() {
     this.videoPlayer.src = "";
     this.mediaFile = undefined;
@@ -193,9 +196,7 @@ export class SyncPlayer extends RemoteModelBase {
     this.toPlay = false;
     this.isCaster = false;
     this.received = 0;
-    this.stripes.clear();
-    this.chunkSize = 0;
-    this.chunkTime = 0;
+    this.stripes = [];
   }
 
   setViewerControls(ev: Event) {
@@ -244,15 +245,31 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
-  private bufferFile(position?: number) {
-    position ??= this.videoPlayer.currentTime;
-    const float = position / this.chunkTime;
-    const current = Math.floor(float);
-    this.doBuffer(current);
-    const next = Math.round(float);
-    if (current != next) {
-      this.doBuffer(next);
+  private async bufferFile() {
+    if (!this.mediaFile || !this.vPlayer.stripeFile) return;
+    let stripes = new Array;
+    let current = 0;
+    let data = this.model.buffering(this.mediaFile, this.vPlayer.stripeFile.id, 0);
+    let rest = 0;
+    let buffered = 0;
+    while (data != undefined && this.mediaFile) {
+      rest = data.size;
+      let position = this.videoPlayer.currentTime / this.videoPlayer.duration * this.mediaFile.size;
+      position = Math.floor(position);
+      buffered = this.mediaFile.size - rest;
+      if (position < )
     }
+
+
+    // position ??= this.videoPlayer.currentTime;
+    // if (isNaN(position) || this.chunkTime == 0) return;
+    // const float = position / this.chunkTime;
+    // const current = Math.floor(float);
+    // this.doBuffer(current);
+    // const next = Math.round(float);
+    // if (current != next) {
+    //   this.doBuffer(next);
+    // }
   }
 
   private doBuffer(chunk: number) {
@@ -267,9 +284,9 @@ export class SyncPlayer extends RemoteModelBase {
         const blob = this.mediaFile.slice(cursor, cursor + this.chunkSize);
         this.model.buffering(blob, this.vPlayer.stripeFile.id, cursor);
         this.stripes.add(chunk);
-        console.log("stripes: ", this.stripes);
+        console.log("stripes: ", this.stripes, "last chunk:", blob.size);
       } else {
-        console.error("Out of bound of file:", this.mediaFile.name);
+        console.error("Out of bound of file:", this.mediaFile.size, cursor);
       }
     }
   }
@@ -285,11 +302,11 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   playVideo() {
-    if (!this.canPlay) {
-      console.log("video is not ready for playing");
-      this.toPlay = true;
-      return;
-    }
+    // if (!this.canPlay) {
+    //   console.log("video is not ready for playing");
+    //   this.toPlay = true;
+    //   return;
+    // }
     this.videoPlayer
       .play()
       .then(() => (this.toPlay = false))
@@ -325,6 +342,7 @@ export class SyncPlayer extends RemoteModelBase {
     if (url == null) return;
     console.log("video to play:", url);
     this.videoPlayer.src = url;
+    this.videoPlayer.load();
   }
 
   onSeeking() {
@@ -334,6 +352,6 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   onTimeUpdate() {
-    this.bufferFile();
+    if (this.isCaster) this.bufferFile();
   }
 }
