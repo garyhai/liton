@@ -34,6 +34,7 @@ export interface VideoModel {
   height?: number;
 }
 
+const MIN_BUFFER_SIZE = 1_000_000;
 const MAX_GAP = 2;
 @customElement("sync-player")
 export class SyncPlayer extends RemoteModelBase {
@@ -43,12 +44,18 @@ export class SyncPlayer extends RemoteModelBase {
   private toPlay = false;
   private isCaster = false;
 
+  private stripes = new Set();
+  private chunkSize = 0;
+  private chunkTime = 0;
+
   @property({type: Boolean})
   isHost = false;
   @property({type: Number})
   maxGap = MAX_GAP;
   @property({type: Number})
-  bufferInterval = 50;
+  bufferInterval = 10; // 10 seconds
+  @property({type: Number})
+  minChunkSize = MIN_BUFFER_SIZE; // 2M bytes
 
   @property({type: Object})
   vPlayer: VideoModel = {
@@ -162,13 +169,10 @@ export class SyncPlayer extends RemoteModelBase {
       return html`
         <video
           id="videoPlayer"
-          preload="metadata"
           ?controls=${this.vPlayer.controls}
           ?loop=${this.vPlayer.loop}
           ?autoplay=${this.vPlayer.autoplay}
           @canplay=${this.onCanPlay}
-          @loadeddata=${this.onLoadedData}
-          @loadedmetadata=${this.onLoadedMetaata}
         ></video>
         <h3>已收到的数据长度：${this.received}</h3>
       `;
@@ -181,14 +185,6 @@ export class SyncPlayer extends RemoteModelBase {
   @query("#videoPlayer")
   videoPlayer!: HTMLVideoElement;
 
-  onLoadedData() {
-    console.log("loaded first frame");
-  }
-
-  onLoadedMetaata() {
-    console.log("metadata loaded", this.videoPlayer.duration);
-  }
-
   closeVideo() {
     this.videoPlayer.src = "";
     this.mediaFile = undefined;
@@ -196,7 +192,9 @@ export class SyncPlayer extends RemoteModelBase {
     this.toPlay = false;
     this.isCaster = false;
     this.received = 0;
-    this.stripes = [];
+    this.stripes.clear();
+    this.chunkSize = 0;
+    this.chunkTime = 0;
   }
 
   setViewerControls(ev: Event) {
@@ -232,44 +230,35 @@ export class SyncPlayer extends RemoteModelBase {
         this.chunkTime = this.vPlayer.duration;
       } else {
         let bs =
-        (this.bufferInterval / this.vPlayer.duration) *
-        this.vPlayer.source!.size;
+          (this.bufferInterval / this.vPlayer.duration) *
+          this.vPlayer.source!.size;
         bs = Math.ceil(bs);
         this.chunkSize = Math.max(bs, this.minChunkSize);
-        this.chunkTime = this.chunkSize / this.vPlayer.source!.size * this.vPlayer.duration;
+        this.chunkTime =
+          (this.chunkSize / this.vPlayer.source!.size) * this.vPlayer.duration;
       }
-      console.log("chunk size =", this.chunkSize, ", interval = ", this.chunkTime);
+      console.log(
+        "chunk size =",
+        this.chunkSize,
+        ", interval = ",
+        this.chunkTime
+      );
       this.bufferFile();
     } else if (this.toPlay) {
       this.playVideo();
     }
   }
 
-  private async bufferFile() {
-    if (!this.mediaFile || !this.vPlayer.stripeFile) return;
-    let stripes = new Array;
-    let current = 0;
-    let data = this.model.buffering(this.mediaFile, this.vPlayer.stripeFile.id, 0);
-    let rest = 0;
-    let buffered = 0;
-    while (data != undefined && this.mediaFile) {
-      rest = data.size;
-      let position = this.videoPlayer.currentTime / this.videoPlayer.duration * this.mediaFile.size;
-      position = Math.floor(position);
-      buffered = this.mediaFile.size - rest;
-      if (position < )
+  private bufferFile(position?: number) {
+    position ??= this.videoPlayer.currentTime;
+    if (position == null || this.chunkTime == 0) return;
+    const float = position / this.chunkTime;
+    const current = Math.floor(float);
+    this.doBuffer(current);
+    const next = Math.round(float);
+    if (current != next) {
+      this.doBuffer(next);
     }
-
-
-    // position ??= this.videoPlayer.currentTime;
-    // if (isNaN(position) || this.chunkTime == 0) return;
-    // const float = position / this.chunkTime;
-    // const current = Math.floor(float);
-    // this.doBuffer(current);
-    // const next = Math.round(float);
-    // if (current != next) {
-    //   this.doBuffer(next);
-    // }
   }
 
   private doBuffer(chunk: number) {
@@ -302,11 +291,11 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   playVideo() {
-    // if (!this.canPlay) {
-    //   console.log("video is not ready for playing");
-    //   this.toPlay = true;
-    //   return;
-    // }
+    if (!this.canPlay) {
+      console.log("video is not ready for playing");
+      this.toPlay = true;
+      return;
+    }
     this.videoPlayer
       .play()
       .then(() => (this.toPlay = false))
@@ -342,7 +331,6 @@ export class SyncPlayer extends RemoteModelBase {
     if (url == null) return;
     console.log("video to play:", url);
     this.videoPlayer.src = url;
-    this.videoPlayer.load();
   }
 
   onSeeking() {

@@ -35,7 +35,7 @@ export class ModelController implements ReactiveController {
   maxSize = 60_000;
   sequence = 1;
   queue = new Map();
-  backlog = 2_000_000;
+  backlog = 10_000_000;
 
   constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
