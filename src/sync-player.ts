@@ -224,7 +224,6 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   onCanPlay() {
-    console.log("video is can play now");
     this.canPlay = true;
     if (this.isCaster) {
       this.vPlayer.duration = this.videoPlayer.duration;
@@ -354,24 +353,23 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
-  async onTimeUpdate() {
-    if (!this.isCaster) return;
+  onTimeUpdate() {
+    if (!this.isCaster || !this.mediaFile) return;
     // 0.25, 4Hz
     if (this.videoPlayer.currentTime % this.vPlayer.syncInterval < 0.3) {
       this.vPlayer.syncing = this.videoPlayer.currentTime;
       this.model.setData(this.vPlayer.syncing, "syncing");
     }
     const [low, high] = this.bufferRange;
-    if (high > 0 && high < low + this.bufferSize) {
-      // no more data
+    if (high >= this.mediaFile.size) {
       return;
     }
-    const size = this.mediaFile!.size;
     const position =
-      (this.videoPlayer.currentTime / this.videoPlayer.duration) * size;
+      (this.videoPlayer.currentTime / this.videoPlayer.duration) *
+      this.mediaFile.size;
     const rate = (position - low) / this.bufferSize;
     if (rate > 0.5) {
-      await this.fillBuffer(high);
+      this.fillBuffer(high).catch((e) => console.error(e));
     }
   }
 
