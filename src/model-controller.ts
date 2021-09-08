@@ -8,7 +8,7 @@ export function isRpcRequest(
 
 export interface FileInfo {
   name: string;
-  mimeType: string;
+  type: string;
   size: number;
   lastModified: number;
 }
@@ -36,6 +36,7 @@ export class ModelController implements ReactiveController {
   sequence = 1;
   queue = new Map();
   backlog = 10_000_000;
+  waiting = 100; // threshold: 100M Bytes per second.
 
   constructor(host: RemoteModelHost, url?: string) {
     (this.host = host).addController(this);
@@ -95,10 +96,15 @@ export class ModelController implements ReactiveController {
     return this.invoke("INSTANT_FILE", info) as Promise<StripeFile>;
   }
 
-  buffering(data: Blob, id: number, offset?: number): Blob | undefined {
+  buffering(
+    data: Blob | BinaryData,
+    id: number,
+    offset?: number
+  ): Blob | undefined {
     if (this.conn == null || this.conn.readyState !== WebSocket.OPEN) {
       throw new Error("disconnected");
     }
+    if (!(data instanceof Blob)) data = new Blob([data]);
     let cap = this.backlog - this.conn.bufferedAmount;
     if (cap <= 0) return data;
     let rest = undefined;
@@ -123,21 +129,22 @@ export class ModelController implements ReactiveController {
     return rest;
   }
 
-  streaming(data: ArrayBuffer) {
-    if (!this.conn) throw new Error("disconnected");
-    if (data.byteLength > this.maxSize)
-      throw new Error(`data block is too big > ${this.maxSize}`);
-    this.conn.send(data);
+  async streaming(data: Blob | BinaryData, id: number, offset?: number) {
+    offset ??= 0;
+    let rest = this.buffering(data, id, offset);
+    while (rest) {
+      await sleep(this.waiting);
+      rest = this.buffering(rest, id, offset + rest.size);
+    }
+  }
+
+  async broadcast(data: Blob | BinaryData, offset?: number) {
+    await this.streaming(data, 0, offset);
   }
 
   multicast(value: unknown, path?: string) {
     if (!this.conn) throw new Error("disconnected");
     this.notify("MULTICAST", value, path ?? ".");
-  }
-
-  broadcast(value: unknown, path?: string) {
-    if (!this.conn) throw new Error("disconnected");
-    this.notify("BROADCAST", value, path ?? ".");
   }
 
   connect(url?: string) {
@@ -167,7 +174,6 @@ export class ModelController implements ReactiveController {
     if (isRpcRequest(data)) {
       switch (data.method) {
         case "NOTIFY": {
-          console.log("received notification:", data);
           if (Array.isArray(data.params)) {
             const [action, , path, value] = data.params as any;
             this.handle_notify(action, path, value);
@@ -264,4 +270,8 @@ export class JsonRpcError extends Error {
     this.data = errData.data;
     this.name = "JSONRPC 2.0 Error";
   }
+}
+
+export function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

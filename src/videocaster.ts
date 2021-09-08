@@ -184,7 +184,7 @@ export class Videocaster extends RemoteModelBase {
       const chunk = await blob.arrayBuffer();
       this.bufferRange = [position, position + chunk.byteLength];
       this.sourceBuffer.appendBuffer(chunk);
-      this.model.streaming(chunk);
+      this.model.broadcast(chunk, position);
     }
   }
 }

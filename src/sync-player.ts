@@ -1,6 +1,6 @@
 import {html} from "lit";
 import {customElement, query, property} from "lit/decorators.js";
-import {FileInfo, StripeFile} from "./model-controller.js";
+import {FileInfo} from "./model-controller.js";
 import {putValue, RemoteModelBase} from "./remoteview.js";
 
 export interface RemoteCommand {
@@ -9,11 +9,18 @@ export interface RemoteCommand {
 }
 
 function isSameSource(
-  s1: StripeFile | undefined,
-  s2: StripeFile | undefined
+  s1: FileInfo | undefined,
+  s2: FileInfo | undefined
 ): boolean {
   if (s1 == s2) return true;
-  return !!s1 && !!s2 && s1.id == s2.id && s1.url == s2.url;
+  return (
+    !!s1 &&
+    !!s2 &&
+    s1.name == s2.name &&
+    s1.lastModified == s2.lastModified &&
+    s1.size == s2.size &&
+    s1.type == s2.type
+  );
 }
 
 export interface VideoModel {
@@ -26,36 +33,33 @@ export interface VideoModel {
   loop: boolean;
   muted: boolean;
   pip: boolean;
+  bufferTime: number;
   fullScreen: boolean;
   source?: FileInfo;
-  stripeFile?: StripeFile;
   duration?: number;
   width?: number;
   height?: number;
 }
 
 const MIN_BUFFER_SIZE = 1_000_000;
-const MAX_GAP = 2;
+const MAX_GAP = 1;
 @customElement("sync-player")
 export class SyncPlayer extends RemoteModelBase {
+  private mediaSource?: MediaSource;
   private mediaFile?: File;
+  private sourceBuffer?: SourceBuffer;
+  private buffers: BinaryData[] = [];
+  private bufferRange = [0, 0];
+  private bufferSize = MIN_BUFFER_SIZE;
   private received = 0;
   private canPlay = false;
   private toPlay = false;
   private isCaster = false;
 
-  private stripes = new Set();
-  private chunkSize = 0;
-  private chunkTime = 0;
-
   @property({type: Boolean})
   isHost = false;
   @property({type: Number})
   maxGap = MAX_GAP;
-  @property({type: Number})
-  bufferInterval = 10; // 10 seconds
-  @property({type: Number})
-  minChunkSize = MIN_BUFFER_SIZE; // 2M bytes
 
   @property({type: Object})
   vPlayer: VideoModel = {
@@ -70,32 +74,29 @@ export class SyncPlayer extends RemoteModelBase {
     muted: false,
     pip: false,
     fullScreen: false,
+    bufferTime: 20,
   };
 
   async onOpen() {
     if (this.isHost) {
       this.model.setData(this.vPlayer);
-    } else {
-      const player = (await this.model.getData()) as VideoModel;
-      this.vPlayer = {...this.vPlayer, ...player};
-      console.log("onOpen", this.vPlayer);
-      if (this.vPlayer.playing) {
-        this.remoteLoadVideo();
-        this.playVideo();
-      }
     }
+    //  else {
+    //   const player = (await this.model.getData()) as VideoModel;
+    //   console.log(player);
+    //   this.vPlayer = {...this.vPlayer, ...player};
+    //   if (this.vPlayer.playing) {
+    //     this.remoteLoadVideo();
+    //     this.playVideo();
+    //   }
+    // }
   }
 
   onUpdate(data: unknown, path?: string) {
-    console.log("onUpdate:", data);
-    const {playing, syncing, fullScreen, stripeFile, muted, pip} = this.vPlayer;
-    this.vPlayer = putValue(this.vPlayer, data, path);
-    if (!isSameSource(this.vPlayer.stripeFile, stripeFile)) {
-      if (this.vPlayer.stripeFile) {
-        this.remoteLoadVideo();
-      } else {
-        this.closeVideo();
-      }
+    const {playing, syncing, fullScreen, source, muted, pip} = this.vPlayer;
+    putValue(this.vPlayer, data, path);
+    if (!isSameSource(this.vPlayer.source, source)) {
+      this.remoteLoadVideo();
     }
     if (this.vPlayer.playing !== playing) {
       if (playing) {
@@ -105,7 +106,6 @@ export class SyncPlayer extends RemoteModelBase {
       }
     }
     if (this.vPlayer.muted !== muted) {
-      console.log("change muted from ", muted);
       this.videoPlayer.muted = this.vPlayer.muted;
     }
     if (this.vPlayer.sync && this.vPlayer.syncing !== syncing) {
@@ -186,15 +186,21 @@ export class SyncPlayer extends RemoteModelBase {
   videoPlayer!: HTMLVideoElement;
 
   closeVideo() {
-    this.videoPlayer.src = "";
+    try {
+      this.sourceBuffer?.abort();
+      this.mediaSource?.endOfStream();
+    } catch (e) {
+      console.error("exception when video closing:", e);
+    }
+    this.mediaSource = undefined;
+    this.sourceBuffer = undefined;
     this.mediaFile = undefined;
+    this.bufferRange = [0, 0];
     this.canPlay = false;
     this.toPlay = false;
     this.isCaster = false;
+    this.buffers = [];
     this.received = 0;
-    this.stripes.clear();
-    this.chunkSize = 0;
-    this.chunkTime = 0;
   }
 
   setViewerControls(ev: Event) {
@@ -203,21 +209,18 @@ export class SyncPlayer extends RemoteModelBase {
   }
 
   syncSeek() {
-    const gap = Math.abs(this.videoPlayer.currentTime - this.vPlayer.syncing);
+    const {syncing} = this.vPlayer;
+    const gap = Math.abs(this.videoPlayer.currentTime - syncing);
     if (gap > this.maxGap) {
-      console.log("sync the gap:", gap);
-      this.videoPlayer.currentTime = this.vPlayer.syncing;
+      console.warn("sync the gap:", gap);
+      this.videoPlayer.currentTime = syncing;
     }
   }
 
   async onHostPlay() {
     this.vPlayer.playing = true;
     this.model.setData(true, "playing");
-  }
-
-  onPiP() {
-    this.vPlayer.pip = true;
-    this.model.setData(true, "pip");
+    // await this.videoPlayer.play();
   }
 
   onCanPlay() {
@@ -225,63 +228,16 @@ export class SyncPlayer extends RemoteModelBase {
     this.canPlay = true;
     if (this.isCaster) {
       this.vPlayer.duration = this.videoPlayer.duration;
-      if (this.bufferInterval >= this.vPlayer.duration) {
-        this.chunkSize = this.vPlayer.source!.size;
-        this.chunkTime = this.vPlayer.duration;
-      } else {
-        let bs =
-          (this.bufferInterval / this.vPlayer.duration) *
-          this.vPlayer.source!.size;
-        bs = Math.ceil(bs);
-        this.chunkSize = Math.max(bs, this.minChunkSize);
-        this.chunkTime =
-          (this.chunkSize / this.vPlayer.source!.size) * this.vPlayer.duration;
-      }
-      console.log(
-        "chunk size =",
-        this.chunkSize,
-        ", interval = ",
-        this.chunkTime
-      );
-      this.bufferFile();
+      const bs =
+        (this.vPlayer.bufferTime / this.vPlayer.duration) *
+        this.vPlayer.source!.size;
+      this.bufferSize = Math.max(bs, MIN_BUFFER_SIZE);
     } else if (this.toPlay) {
       this.playVideo();
     }
   }
 
-  private bufferFile(position?: number) {
-    position ??= this.videoPlayer.currentTime;
-    if (position == null || this.chunkTime == 0) return;
-    const float = position / this.chunkTime;
-    const current = Math.floor(float);
-    this.doBuffer(current);
-    const next = Math.round(float);
-    if (current != next) {
-      this.doBuffer(next);
-    }
-  }
-
-  private doBuffer(chunk: number) {
-    if (!this.mediaFile || !this.vPlayer.stripeFile) {
-      console.error("media source is not ready for buffering");
-      return;
-    }
-    if (!this.stripes.has(chunk)) {
-      const cursor = chunk * this.chunkSize;
-      console.log("Buffering chunk", chunk, "at position", cursor);
-      if (cursor < this.mediaFile.size) {
-        const blob = this.mediaFile.slice(cursor, cursor + this.chunkSize);
-        this.model.buffering(blob, this.vPlayer.stripeFile.id, cursor);
-        this.stripes.add(chunk);
-        console.log("stripes: ", this.stripes, "last chunk:", blob.size);
-      } else {
-        console.error("Out of bound of file:", this.mediaFile.size, cursor);
-      }
-    }
-  }
-
   onVolumeChange() {
-    console.log("volume changed", this.videoPlayer.volume);
     if (this.isHost) {
       if (this.videoPlayer.muted !== this.vPlayer.muted) {
         this.vPlayer.muted = this.videoPlayer.muted;
@@ -290,9 +246,14 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
+  onPiP() {
+    this.vPlayer.pip = true;
+    this.model.setData(true, "pip");
+  }
+
   playVideo() {
     if (!this.canPlay) {
-      console.log("video is not ready for playing");
+      console.warn("video is not ready for playing");
       this.toPlay = true;
       return;
     }
@@ -310,36 +271,120 @@ export class SyncPlayer extends RemoteModelBase {
     }
   }
 
-  async localLoadVideo() {
+  localLoadVideo() {
     this.closeVideo();
     if (!this.videoPlayer || !this.videoFile || this.videoFile.value == "")
       return;
     this.isCaster = true;
     this.mediaFile = this.videoFile.files![0];
-    const {name, size, type: mimeType, lastModified} = this.mediaFile;
-    const fileSource = {name, size, mimeType, lastModified};
+    const {name, size, type, lastModified} = this.mediaFile;
+    const fileSource = {name, size, type, lastModified};
     this.vPlayer.source = fileSource;
-    this.vPlayer.stripeFile = await this.model.createFileBuffer(fileSource);
-    this.videoPlayer.src = URL.createObjectURL(this.mediaFile);
-    this.model.setData(this.vPlayer);
+    this.mediaSource = new MediaSource();
+    this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
+    this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
+    this.canPlay = false;
+    this.model.setData(fileSource, "source");
     this.requestUpdate();
   }
 
   remoteLoadVideo() {
     this.closeVideo();
-    const url = this.vPlayer.stripeFile?.url;
-    if (url == null) return;
-    console.log("video to play:", url);
-    this.videoPlayer.src = url;
+    if (this.vPlayer.source == null) return;
+    this.mediaSource = new MediaSource();
+    this.mediaSource.addEventListener("sourceopen", () => this.onSourceOpen());
+    this.videoPlayer.src = URL.createObjectURL(this.mediaSource);
+    this.canPlay = false;
+    // this.requestUpdate();
+  }
+
+  onSourceOpen() {
+    const mimeCodec = 'video/mp4; codecs="avc1.42E01E, mp4a.40.2"';
+    // const mimeCodec = this.vPlayer.source?.type;
+    // if (mimeCodec == undefined) {
+    //   console.error("unknown media type");
+    //   return;
+    // }
+    this.sourceBuffer = this.mediaSource!.addSourceBuffer(mimeCodec);
+    this.sourceBuffer.addEventListener("updateend", () => this.doBuffer());
+    if (this.isCaster) {
+      this.fillBuffer(0).catch((e) => console.error("Buffering error:", e));
+    } else {
+      this.doBuffer();
+    }
+  }
+
+  doBuffer(data?: BinaryData) {
+    if (data) {
+      if (
+        this.sourceBuffer &&
+        !this.sourceBuffer.updating &&
+        this.buffers.length == 0
+      ) {
+        this.sourceBuffer.appendBuffer(data);
+        return;
+      }
+      this.buffers.push(data);
+    }
+    while (this.sourceBuffer && !this.sourceBuffer.updating) {
+      data = this.buffers.shift();
+      if (!data) break;
+      this.sourceBuffer.appendBuffer(data);
+    }
+  }
+
+  async fillBuffer(position: number) {
+    if (this.mediaFile && this.sourceBuffer) {
+      const length = Math.min(this.mediaFile.size - position, this.bufferSize);
+      const blob = this.mediaFile.slice(position, position + length);
+      const chunk = await blob.arrayBuffer();
+      this.bufferRange = [position, position + chunk.byteLength];
+      await this.model.broadcast(chunk, position);
+      this.doBuffer(chunk);
+    }
+  }
+
+  onStreaming(data: ArrayBuffer) {
+    if (!this.isCaster) {
+      const dv = new DataView(data, 4);
+      this.received += dv.byteLength;
+      this.doBuffer(dv);
+    } else {
+      console.error("received unexpected streaming data as a caster");
+    }
+  }
+
+  async onTimeUpdate() {
+    if (!this.isCaster) return;
+    // 0.25, 4Hz
+    if (this.videoPlayer.currentTime % this.vPlayer.syncInterval < 0.3) {
+      this.vPlayer.syncing = this.videoPlayer.currentTime;
+      this.model.setData(this.vPlayer.syncing, "syncing");
+    }
+    const [low, high] = this.bufferRange;
+    if (high > 0 && high < low + this.bufferSize) {
+      // no more data
+      return;
+    }
+    const size = this.mediaFile!.size;
+    const position =
+      (this.videoPlayer.currentTime / this.videoPlayer.duration) * size;
+    const rate = (position - low) / this.bufferSize;
+    if (rate > 0.5) {
+      await this.fillBuffer(high);
+    }
   }
 
   onSeeking() {
-    if (!this.canPlay) return;
-    this.vPlayer.syncing = this.videoPlayer.currentTime;
-    this.model.setData(this.vPlayer.syncing, "syncing");
-  }
-
-  onTimeUpdate() {
-    if (this.isCaster) this.bufferFile();
+    if (!this.mediaSource || !this.sourceBuffer) return;
+    if (this.mediaSource.readyState === "open") {
+      this.vPlayer.syncing = this.videoPlayer.currentTime;
+      this.model.setData(this.vPlayer.syncing, "syncing");
+      return;
+    } else {
+      console.log("seek but not open?");
+      console.log(this.mediaSource.readyState);
+      return;
+    }
   }
 }
