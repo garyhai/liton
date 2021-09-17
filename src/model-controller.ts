@@ -132,9 +132,10 @@ export class ModelController implements ReactiveController {
   async streaming(data: Blob | BinaryData, id: number, offset?: number) {
     offset ??= 0;
     let rest = this.buffering(data, id, offset);
+    const total = data instanceof Blob ? data.size : data.byteLength;
     while (rest) {
       await sleep(this.waiting);
-      rest = this.buffering(rest, id, offset + rest.size);
+      rest = this.buffering(rest, id, total - rest.size);
     }
   }
 
